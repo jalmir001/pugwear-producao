@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pug Wear — Controle de Produção</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--bg:#0f1216;--card:#171c22;--card2:#1e242c;--line:#2a323c;--txt:#e8edf2;--mut:#8b97a5;--acc:#22c55e;--warn:#f59e0b;--red:#ef4444;--radius:14px}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);-webkit-tap-highlight-color:transparent}
+  header{position:sticky;top:0;z-index:20;background:#12161bee;border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px}
+  header .logo{width:30px;height:30px;border-radius:8px;background:var(--acc);display:grid;place-items:center;color:#04120a;font-weight:800}
+  header h1{font-size:16px;margin:0;font-weight:700} header .sub{font-size:11px;color:var(--mut)}
+  main{padding:14px;max-width:1000px;margin:0 auto;padding-bottom:92px}
+  .tabbar{position:fixed;bottom:0;left:0;right:0;background:#12161b;border-top:1px solid var(--line);display:flex;z-index:20}
+  .tabbar button{flex:1;background:none;border:0;color:var(--mut);padding:9px 4px 12px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+  .tabbar button .ic{font-size:19px} .tabbar button.on{color:var(--acc)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+  .card h2{font-size:14px;margin:0 0 10px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{background:var(--acc);color:#04120a;border:0;border-radius:10px;padding:11px 14px;font-weight:700;font-size:14px;cursor:pointer}
+  .btn.sec{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+  .btn.mini{padding:7px 10px;font-size:12px;border-radius:8px}
+  .btn.red{background:#3a1d1d;color:#ffb4b4;border:1px solid #5a2a2a}
+  input,select,textarea{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px;font-size:14px;width:100%;font-family:inherit}
+  label{font-size:11px;color:var(--mut);display:block;margin:0 0 4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pill{display:inline-block;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:700}
+  .p-abe{background:#20303f;color:#8ec5ff}.p-prod{background:#3a2f12;color:#ffd479}.p-ok{background:#12351f;color:#79f2a6}.p-atr{background:#3a1717;color:#ff9b9b}.p-enc{background:#26212f;color:#c9b6ff}
+  .muted{color:var(--mut);font-size:12px}
+  .between{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .tot{font-size:22px;font-weight:800}
+  .step{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;background:var(--card2)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .kpi{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+  .kpi b{font-size:20px;display:block}.kpi span{font-size:10px;color:var(--mut)}
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-end;justify-content:center;z-index:40}.modal.on{display:flex}
+  .sheet{background:var(--bg);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:1000px;max-height:94vh;overflow:auto;padding:16px}
+  @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:18px}}
+  .hint{font-size:11px;color:var(--mut);background:#141a20;border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin-bottom:12px}
+  .gwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-top:6px}
+  table.g{border-collapse:collapse;width:100%;min-width:430px;font-size:13px}
+  table.g th,table.g td{border-bottom:1px solid var(--line);padding:6px;text-align:center}
+  table.g th{color:var(--mut);font-size:11px;position:sticky;top:0;background:var(--card)}
+  table.g td:first-child,table.g th:first-child{text-align:left;position:sticky;left:0;background:var(--card);white-space:nowrap;font-weight:600}
+  table.g input{width:54px;text-align:center;padding:7px 2px}
+  table.g tfoot td{font-weight:700;color:var(--acc)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--mut);font-weight:600;font-size:11px}.right{text-align:right}
+  .tl{border-left:2px solid var(--line);margin-left:6px;padding-left:12px}
+  .tl div{margin-bottom:8px;font-size:12px;position:relative}.tl div::before{content:'';position:absolute;left:-17px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--acc)}
+  .close{float:right;background:none;border:0;color:var(--mut);font-size:22px;cursor:pointer}
+  #toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:#0d3a1e;color:#c8f7d8;border:1px solid #1c6b39;padding:9px 16px;border-radius:999px;font-size:13px;z-index:60;opacity:0;transition:.25s;pointer-events:none}
+  #toast.on{opacity:1}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px;margin:3px 4px 3px 0;cursor:pointer;user-select:none}
+  .chip.on{border-color:var(--acc);color:var(--acc)}
+</style>
+</head>
+<body>
+<header><div class="logo">P</div><div><h1>Controle de Produção</h1><div class="sub">Pug Wear · protótipo (Fase 1)</div></div></header>
+<main id="app"></main>
+<div class="tabbar">
+  <button data-t="painel" class="on"><span class="ic">▦</span>Painel</button>
+  <button data-t="lotes"><span class="ic">▣</span>Lotes</button>
+  <button data-t="faccoes"><span class="ic">✂</span>Facções</button>
+  <button data-t="fin"><span class="ic">$</span>Financeiro</button>
+</div>
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+const ETAPAS_PADRAO=["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento"];
+const ETAPAS_OPC=["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento"];
+const TAMS=["P","M","G","GG","G1","G2"];
+const CORNOME={VerdeMilitar:"Verde Militar",VERDEMACA:"Verde Maçã",Salmao:"Salmão",ROXO:"Roxo",Preto:"Preto",Grafite:"Grafite",CinzaClaro:"Cinza Claro",CHOCOLATE:"Chocolate",CAPUCCINO:"Capuccino",Branco:"Branco",Bordo:"Bordô",AzulClaro:"Azul Claro",AZULMARINHO:"Azul Marinho",AZULJEANS:"Azul Jeans"};
+const CATALOGO={"C-BP-001":{nome:"Camiseta Básica Pug Wear",tams:TAMS,cores:["Branco","Preto","Grafite","CinzaClaro","AZULMARINHO","AzulClaro","AZULJEANS","VerdeMilitar","VERDEMACA","Bordo","CHOCOLATE","CAPUCCINO","Salmao","ROXO"]}};
+const money=v=>"R$ "+(Number(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid=()=>Math.random().toString(36).slice(2,9);
+const hoje=()=>new Date().toISOString().slice(0,10);
+const corLabel=c=>CORNOME[c]||c;
+const fdate=d=>d?d.split("-").reverse().join("/"):"—";
+
+let S=load();
+function empresaPadrao(){return {nome:"Pug Wear",cnpj:"61.886.777/0001-90",endereco:"Rod. Dep. Antônio Heil, SC-486, 3689 - Sala 02 · Santa Terezinha · Brusque/SC · CEP 88352-288"};}
+function load(){try{const x=JSON.parse(localStorage.getItem("pugprod2"));if(x&&x.lotes){if(!x.empresa)x.empresa=empresaPadrao();return x;}}catch(e){}return seed();}
+function save(){try{localStorage.setItem("pugprod2",JSON.stringify(S));}catch(e){alert("Armazenamento cheio (provável excesso de fotos). Exporte um backup e remova fotos antigas.");}cloudPush();}
+
+/* ---------- Sincronização na nuvem (Supabase) ---------- */
+const SB_URL="https://omyhsvyqajwudzarpjig.supabase.co";
+const SB_KEY="sb_publishable_xj_6LaksupDHWetrHhtYtw_y1UlSy74";
+const SB_ROW="pugwear";
+let sb=null; try{ sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){}
+let _pushT=null;
+function setSB(t){const e=document.getElementById("sbst");if(e)e.textContent=t;}
+function cloudPush(){
+  if(!sb)return; clearTimeout(_pushT); setSB("sincronizando…");
+  _pushT=setTimeout(async()=>{
+    try{const {error}=await sb.from("app_estado").upsert({id:SB_ROW,dados:S,atualizado_em:new Date().toISOString()});
+      setSB(error?"⚠ salvo só neste aparelho":"☁ salvo na nuvem");}catch(e){setSB("⚠ salvo só neste aparelho");}
+  },700);
+}
+async function cloudPull(){
+  if(!sb){setSB("offline");return;}
+  if(document.querySelector("#modal.on"))return; // não interromper uma edição aberta
+  setSB("carregando…");
+  try{const {data,error}=await sb.from("app_estado").select("dados").eq("id",SB_ROW).maybeSingle();
+    if(error){setSB("⚠ salvo só neste aparelho");return;}
+    const d=data&&data.dados;
+    if(d&&d.lotes){S=d;if(!S.empresa)S.empresa=empresaPadrao();try{localStorage.setItem("pugprod2",JSON.stringify(S));}catch(e){}render();setSB("☁ salvo na nuvem");}
+    else{cloudPush();} // nuvem vazia: sobe o que já existe aqui
+  }catch(e){setSB("⚠ salvo só neste aparelho");}
+}
+function bootSync(){
+  const b=document.createElement("div");b.id="sbst";
+  b.style.cssText="position:fixed;bottom:10px;right:10px;font-size:11px;background:#000a;color:#fff;padding:4px 9px;border-radius:12px;z-index:9999;opacity:.9;font-family:inherit";
+  document.body.appendChild(b);
+  cloudPull();
+  window.addEventListener("focus",cloudPull);
+}
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),1600);}
+function seed(){
+  const f=[{id:uid(),nome:"Costura Maria (exemplo)",servico:"Costura",valor:2.50},{id:uid(),nome:"Bordado Nei (exemplo)",servico:"Bordado",valor:1.20}];
+  const lote={id:uid(),numero:1,ref:"C-BP-001",produto:"Camiseta Básica Pug Wear",criadoEm:hoje(),foto:"",obs:"",custoMP:0,encerrado:false,
+    gradeCores:{Grafite:{P:10,M:20,G:30,GG:20,G1:12,G2:8},Preto:{P:8,M:16,G:24,GG:16,G1:10,G2:6}},
+    etapas:[{nome:"Corte",faccaoId:"",valor:0,qtdEnv:150,qtdRet:150,dtEnv:hoje(),dtRet:hoje(),dtPrev:"",status:"Concluído",pago:false},
+      {nome:"Costura",faccaoId:f[0].id,valor:2.50,qtdEnv:150,qtdRet:0,dtEnv:hoje(),dtRet:"",dtPrev:"",status:"Em produção",pago:false},
+      {nome:"Bordado",faccaoId:f[1].id,valor:1.20,qtdEnv:0,qtdRet:0,dtEnv:"",dtRet:"",dtPrev:"",status:"Aberto",pago:false},
+      {nome:"Acabamento",faccaoId:"",valor:0,qtdEnv:0,qtdRet:0,dtEnv:"",dtRet:"",dtPrev:"",status:"Aberto",pago:false}],
+    historico:[{q:new Date().toLocaleString("pt-BR"),t:"Lote criado (exemplo)"}]};
+  return {faccoes:f,lotes:[lote],seq:2,empresa:empresaPadrao()};
+}
+function coresDe(l){return l.gradeCores?l.gradeCores:{[l.cor||"—"]:(l.grade||{})};}
+function totGrade(g){return TAMS.reduce((s,t)=>s+(Number(g[t])||0),0);}
+function totLote(l){return Object.values(coresDe(l)).reduce((s,g)=>s+totGrade(g),0);}
+function etStatus(e){if(e.status!=="Concluído"&&e.dtPrev&&e.dtPrev<hoje())return"Atrasado";return e.status;}
+function statusLote(l){if(l.encerrado)return"Encerrado";const st=l.etapas.map(etStatus);if(st.includes("Atrasado"))return"Atrasado";if(st.every(s=>s==="Concluído"))return"Concluído";if(st.some(s=>s==="Em produção"))return"Em produção";return"Aberto";}
+function pill(s){const m={"Aberto":"p-abe","Em produção":"p-prod","Concluído":"p-ok","Atrasado":"p-atr","Encerrado":"p-enc"};return`<span class="pill ${m[s]||'p-abe'}">${s}</span>`;}
+function fName(id){const f=S.faccoes.find(x=>x.id===id);return f?f.nome:"—";}
+
+let TAB="painel";
+document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));render();});
+function render(){({painel:vPainel,lotes:vLotes,faccoes:vFaccoes,fin:vFin}[TAB])();}
+
+// ---------- PAINEL ----------
+function vPainel(){
+  const L=S.lotes,abertos=L.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l))).length,atr=L.filter(l=>statusLote(l)==="Atrasado").length;
+  const pecas=L.reduce((s,l)=>s+totLote(l),0),aPagar=finPorFaccao().reduce((s,f)=>s+f.pendente,0);
+  document.getElementById("app").innerHTML=`
+    <div class="kpis"><div class="kpi"><b>${L.length}</b><span>LOTES</span></div><div class="kpi"><b>${abertos}</b><span>EM ABERTO</span></div><div class="kpi"><b style="color:${atr?'var(--red)':'inherit'}">${atr}</b><span>ATRASADOS</span></div><div class="kpi"><b>${pecas}</b><span>PEÇAS</span></div></div>
+    <div class="card" style="margin-top:12px"><div class="between"><h2 style="margin:0">A pagar às facções</h2><b class="tot" style="color:var(--acc)">${money(aPagar)}</b></div><div class="muted">Total pendente por facção.</div></div>
+    <div class="card"><div class="between"><h2 style="margin:0">Lotes em andamento</h2><button class="btn mini" onclick="novoLote()">+ Novo lote</button></div>
+    ${L.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l))).map(cardLote).join("")||'<div class="muted">Nenhum lote em andamento.</div>'}</div>
+    <div class="card"><div class="between"><h2 style="margin:0">Dados da empresa (cabeçalho do romaneio)</h2><button class="btn sec mini" onclick="editEmpresa()">editar</button></div><div class="muted"><b>${S.empresa.nome}</b>${S.empresa.cnpj?" · CNPJ "+S.empresa.cnpj:""}${S.empresa.endereco?"<br>"+S.empresa.endereco:""}</div></div>
+    <div class="card"><h2>Backup dos dados</h2><div class="muted" style="margin-bottom:8px">Os dados ficam neste navegador. Exporte de vez em quando pra não perder.</div>
+    <div class="row"><button class="btn sec mini" onclick="exportBackup()">⬇️ Exportar backup</button><button class="btn sec mini" onclick="document.getElementById('imp').click()">⬆️ Importar</button><button class="btn sec mini" onclick="exportCSV()">📊 Exportar lotes (CSV)</button><input id="imp" type="file" accept="application/json" style="display:none" onchange="importBackup(this)"></div></div>`;
+}
+function cardLote(l){const cores=Object.keys(coresDe(l));const et=l.etapas.find(e=>etStatus(e)==="Em produção"||etStatus(e)==="Atrasado")||l.etapas.find(e=>e.status==="Aberto");
+  return `<div class="card" style="background:var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><div class="between"><b>#${l.numero} · ${l.produto}</b>${pill(statusLote(l))}</div>
+    <div class="muted">${cores.map(corLabel).join(", ")} · ${totLote(l)} pç</div><div class="muted">Agora: ${et?et.nome+(et.faccaoId?" · "+fName(et.faccaoId):""):"—"}</div></div>`;}
+
+// ---------- LOTES (com filtro) ----------
+let _fLotes={q:"",st:""};
+function vLotes(){
+  const L=S.lotes.slice().reverse().filter(l=>{
+    if(_fLotes.st&&statusLote(l)!==_fLotes.st)return false;
+    if(_fLotes.q){const q=_fLotes.q.toLowerCase();const txt=(l.produto+" "+l.ref+" "+Object.keys(coresDe(l)).map(corLabel).join(" ")+" #"+l.numero).toLowerCase();if(!txt.includes(q))return false;}
+    return true;});
+  document.getElementById("app").innerHTML=`<div class="between" style="margin-bottom:10px"><h2 style="margin:0">Lotes</h2><button class="btn" onclick="novoLote()">+ Novo lote</button></div>
+    <div class="grid2" style="margin-bottom:10px"><input placeholder="Buscar produto/cor/nº" value="${_fLotes.q}" oninput="_fLotes.q=this.value;vLotes()"><select onchange="_fLotes.st=this.value;vLotes()"><option value="">Todos os status</option>${["Aberto","Em produção","Atrasado","Concluído","Encerrado"].map(s=>`<option ${_fLotes.st===s?"selected":""}>${s}</option>`).join("")}</select></div>
+    ${L.map(cardLote).join("")||'<div class="muted">Nenhum lote com esse filtro.</div>'}`;}
+
+// ---------- NOVO LOTE ----------
+let _fotoPend="",_ref="",_etSel=ETAPAS_PADRAO.slice();
+function lerFoto(inp){const f=inp.files&&inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{_fotoPend=e.target.result;document.getElementById("fotoPrev").innerHTML=`<div class="card" style="background:var(--card2)"><div class="between"><b>Foto anexada</b><button class="btn mini red" onclick="_fotoPend='';document.getElementById('fotoPrev').innerHTML=''">remover</button></div><img src="${_fotoPend}" style="width:100%;border-radius:10px;margin-top:6px"><div class="hint" style="margin-top:8px">📷 <b>Versão online:</b> a IA lê a foto e preenche a grade sozinha. No protótipo, fica anexada como referência.</div></div>`;};r.readAsDataURL(f);}
+function toggleEt(n){if(_etSel.includes(n))_etSel=_etSel.filter(x=>x!==n);else _etSel.push(n);document.getElementById("etChips").innerHTML=chipsEt();}
+function chipsEt(){return ETAPAS_OPC.map(n=>`<span class="chip ${_etSel.includes(n)?'on':''}" onclick="toggleEt('${n}')">${_etSel.includes(n)?'✓ ':''}${n}</span>`).join("");}
+function novoLote(){_fotoPend="";_ref="";_etSel=ETAPAS_PADRAO.slice();
+  const refs=Object.keys(CATALOGO).map(r=>`<option value="${r}">`).join("");
+  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>Novo lote</h2>
+    <div class="hint">Digite a <b>referência</b> (ex.: C-BP-001) que as cores aparecem — ou preencha manual. Também dá pra mandar foto.</div>
+    <div class="row" style="margin-bottom:10px"><button class="btn sec" style="flex:1" onclick="document.getElementById('fCam').click()">📷 Tirar foto</button><button class="btn sec" style="flex:1" onclick="document.getElementById('fImg').click()">🖼️ Adicionar imagem</button></div>
+    <input id="fCam" type="file" accept="image/*" capture="environment" style="display:none" onchange="lerFoto(this)"><input id="fImg" type="file" accept="image/*" style="display:none" onchange="lerFoto(this)"><div id="fotoPrev"></div>
+    <div class="grid2"><div><label>Referência</label><input id="ref" list="refs" placeholder="C-BP-001" oninput="onRef(this.value)"><datalist id="refs">${refs}</datalist></div><div><label>Nome do produto</label><input id="pnome" placeholder="(preenche sozinho)"></div></div>
+    <div id="gradeArea" style="margin-top:12px"></div>
+    <label style="margin-top:12px">Etapas do roteiro (marque as que este lote tem)</label><div id="etChips">${chipsEt()}</div>
+    <label style="margin-top:10px">Observações</label><textarea id="lobs" rows="2" placeholder="Ex.: usar linha X, prazo apertado…"></textarea>
+    <button class="btn" style="width:100%;margin-top:12px" onclick="salvarLote()">Criar lote</button>`);
+  onRef("");
+}
+function onRef(v){_ref=v;const cat=CATALOGO[v.trim()];const area=document.getElementById("gradeArea");
+  if(cat){document.getElementById("pnome").value=cat.nome;
+    area.innerHTML=`<label>Grade por cor — <b>${v.trim()}</b></label><div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${cat.tams.map(t=>`<th>${t}</th>`).join("")}</tr></thead>
+      <tbody>${cat.cores.map(c=>`<tr><td>${corLabel(c)}</td>${cat.tams.map(t=>`<td><input type="number" inputmode="numeric" id="gc_${c}_${t}" placeholder="0" oninput="somaGrade()"></td>`).join("")}</tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total</td>${cat.tams.map(t=>`<td id="colt_${t}">0</td>`).join("")}</tr></tfoot></table></div>
+      <div class="between" style="margin-top:6px"><span class="muted">Só cores com quantidade viram lote.</span><b id="gtot" style="color:var(--acc)">0 pç</b></div>`;
+  }else{area.innerHTML=`<label>Cor</label><input id="corManual" placeholder="Ex.: Grafite"><label style="margin-top:8px">Grade</label><div class="gwrap"><table class="g"><thead><tr><th>Tam</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody><tr><td>Qtd</td>${TAMS.map(t=>`<td><input type="number" id="gm_${t}" placeholder="0"></td>`).join("")}</tr></tbody></table></div>`;}
+}
+function somaGrade(){const cat=CATALOGO[(_ref||"").trim()];if(!cat)return;let tot=0;cat.tams.forEach(t=>{let ct=0;cat.cores.forEach(c=>{ct+=Number((document.getElementById(`gc_${c}_${t}`)||{}).value)||0;});document.getElementById("colt_"+t).textContent=ct;tot+=ct;});document.getElementById("gtot").textContent=tot+" pç";}
+function lerGradeEntrada(prefixCat){const ref=(document.getElementById("ref").value||"").trim();const cat=CATALOGO[ref];const gradeCores={};
+  if(cat){cat.cores.forEach(c=>{const g={};let has=false;cat.tams.forEach(t=>{const v=Number((document.getElementById(`gc_${c}_${t}`)||{}).value)||0;g[t]=v;if(v>0)has=true;});if(has)gradeCores[c]=g;});}
+  else{const cor=(document.getElementById("corManual").value||"Única").trim();const g={};let has=false;TAMS.forEach(t=>{const v=Number((document.getElementById("gm_"+t)||{}).value)||0;g[t]=v;if(v>0)has=true;});if(has)gradeCores[cor]=g;}
+  return {ref,gradeCores};}
+function salvarLote(){const {ref,gradeCores}=lerGradeEntrada();
+  if(!Object.keys(gradeCores).length){alert("Preencha ao menos uma quantidade.");return;}
+  if(!_etSel.length){alert("Selecione ao menos uma etapa.");return;}
+  const nome=(document.getElementById("pnome").value)||ref||"Produto";const tot=Object.values(gradeCores).reduce((s,g)=>s+totGrade(g),0);
+  const et=ETAPAS_OPC.filter(n=>_etSel.includes(n));
+  const l={id:uid(),numero:S.seq++,ref,produto:nome,criadoEm:hoje(),foto:_fotoPend||"",obs:document.getElementById("lobs").value||"",custoMP:0,encerrado:false,gradeCores,
+    etapas:et.map((n,i)=>({nome:n,faccaoId:"",valor:0,qtdEnv:i===0?tot:0,qtdRet:0,dtEnv:i===0?hoje():"",dtRet:"",dtPrev:"",status:i===0?"Em produção":"Aberto",pago:false})),
+    historico:[{q:new Date().toLocaleString("pt-BR"),t:"Lote criado ("+et.join(" → ")+")"}]};
+  S.lotes.push(l);_fotoPend="";save();closeSheet();TAB="lotes";render();toast("Lote #"+l.numero+" criado");
+}
+
+// ---------- DETALHE DO LOTE ----------
+function gradeTabela(l){const c=coresDe(l),cores=Object.keys(c);
+  return `<div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}<th>Tot</th></tr></thead><tbody>
+    ${cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("")}</tbody>
+    <tfoot><tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totLote(l)}</b></td></tr></tfoot></table></div>`;}
+function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">×</button>
+    <div class="between"><h2 style="margin:0">#${l.numero} · ${l.produto}</h2>${pill(statusLote(l))}</div>
+    <div class="muted" style="margin:4px 0 8px">${l.ref?l.ref+" · ":""}${totLote(l)} peças</div>
+    ${gradeTabela(l)}
+    <div class="row" style="margin-top:10px">
+      <button class="btn sec mini" onclick="editarGrade('${l.id}')">✏️ Editar grade</button>
+      <button class="btn sec mini" onclick="duplicarLote('${l.id}')">⧉ Duplicar</button>
+      <select id="destEt" class="btn sec mini" style="width:auto;padding:7px 10px"><option value="">Romaneio: todas</option>${l.etapas.map((e,i)=>`<option value="${i}">→ ${e.nome}</option>`).join("")}</select>
+      <button class="btn sec mini" onclick="printRomaneio('${l.id}')">🖨️ Imprimir</button>
+      <button class="btn sec mini" onclick="alert('Versão online (Fase 2): gera a NF de remessa a partir da grade (CFOP 5901/6901) e manda o Bling emitir. Depende de config fiscal com a contabilidade.')">🧾 NF remessa</button>
+    </div>
+    ${custoCard(l)}
+    ${l.foto?`<img src="${l.foto}" style="width:100%;border-radius:10px;margin:10px 0 4px"><div class="muted" style="margin-bottom:8px">Foto da grade (referência).</div>`:""}
+    <div class="between" style="margin-top:14px"><h2 style="font-size:13px;margin:0">Roteiro / rastreio</h2><button class="btn sec mini" onclick="addEtapa('${l.id}')">+ Etapa</button></div>
+    ${l.etapas.map((e,i)=>stepHtml(l,e,i)).join("")}
+    <label style="margin-top:12px">Observações</label><textarea rows="2" onchange="setLoteTxt('${l.id}','obs',this.value)">${l.obs||""}</textarea>
+    <h2 style="font-size:13px;margin-top:14px">Histórico</h2><div class="tl">${l.historico.slice().reverse().map(h=>`<div><b>${h.q}</b> — ${h.t}</div>`).join("")}</div>
+    <div class="row" style="margin-top:14px">${l.encerrado?`<button class="btn sec mini" onclick="setLoteFlag('${l.id}','encerrado',false)">↩️ Reabrir lote</button>`:`<button class="btn mini" onclick="setLoteFlag('${l.id}','encerrado',true)">✔️ Encerrar lote</button>`}<button class="btn red mini" onclick="delLote('${l.id}')">Excluir</button></div>`;}
+function abrirLote(id){openSheet(loteSheetHtml(S.lotes.find(x=>x.id===id)));}
+function refreshLote(id){const s=document.getElementById("sheet");const y=s.scrollTop;s.innerHTML=loteSheetHtml(S.lotes.find(x=>x.id===id));s.scrollTop=y;}
+function custoLote(l){const mo=l.etapas.reduce((s,e)=>s+(Number(e.valor)||0)*(Number(e.qtdEnv)||0),0);const tot=totLote(l);const mp=(Number(l.custoMP)||0)*tot;const total=mo+mp;return{mo,mp,total,porPeca:tot?total/tot:0};}
+function custoCard(l){const c=custoLote(l);return `<div class="card" style="background:var(--card2);margin-top:12px"><div class="between"><h2 style="margin:0;font-size:13px">Custo</h2><span>Por peça: <b style="color:var(--acc)">${money(c.porPeca)}</b></span></div>
+  <div class="grid2" style="margin-top:6px"><div><label>Matéria-prima / peça</label><input type="number" step="0.01" value="${l.custoMP||0}" onchange="setLoteNum('${l.id}','custoMP',this.value)"></div><div><label>Composição</label><div class="muted">Mão de obra: ${money(c.mo)}<br>Matéria-prima: ${money(c.mp)}<br><b>Total: ${money(c.total)}</b></div></div></div></div>`;}
+function stepHtml(l,e,i){const val=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);const st=etStatus(e);
+  return `<div class="step"><div class="between"><b>${e.nome}</b><span>${pill(st)} <button class="btn mini red" style="margin-left:6px" onclick="rmEtapa('${l.id}',${i})">×</button></span></div>
+    <div class="grid2">
+      <div><label>Facção</label><select onchange="setEt('${l.id}',${i},'faccaoId',this.value)"><option value="">—</option>${S.faccoes.map(f=>`<option value="${f.id}" ${f.id===e.faccaoId?"selected":""}>${f.nome}</option>`).join("")}<option value="__new">＋ Nova facção…</option></select></div>
+      <div><label>Valor / peça</label><input type="number" step="0.01" value="${e.valor}" onchange="setEt('${l.id}',${i},'valor',this.value)"></div>
+      <div><label>Qtd enviada</label><input type="number" value="${e.qtdEnv}" onchange="setEt('${l.id}',${i},'qtdEnv',this.value)"></div>
+      <div><label>Qtd retornada</label><input type="number" value="${e.qtdRet}" onchange="setEt('${l.id}',${i},'qtdRet',this.value)"></div>
+      <div><label>Data envio</label><input type="date" value="${e.dtEnv}" onchange="setEt('${l.id}',${i},'dtEnv',this.value)"></div>
+      <div><label>Previsão (retorno)</label><input type="date" value="${e.dtPrev||''}" onchange="setEt('${l.id}',${i},'dtPrev',this.value)"></div>
+    </div>
+    <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b>${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}</span>
+      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div></div>`;}
+function setEt(lid,i,campo,val){if(campo==="faccaoId"&&val==="__new"){quickFaccao(lid,i);return;}const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const antes=e[campo];
+  e[campo]=(["valor","qtdEnv","qtdRet"].includes(campo))?Number(val)||0:val;
+  if(campo==="status"&&antes!==val){e.dtRet=val==="Concluído"&&!e.dtRet?hoje():e.dtRet;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome}: ${val}`+(e.faccaoId?` (${fName(e.faccaoId)})`:"")});}
+  if(campo==="faccaoId"){const f=S.faccoes.find(x=>x.id===val);if(f&&!e.valor)e.valor=f.valor;}
+  save();refreshLote(lid);toast("Salvo ✓");}
+function quickFaccao(lid,i){openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button><h2>Nova facção</h2><label>Nome</label><input id="qfn" placeholder="Nome da facção">
+  <div class="grid2" style="margin-top:10px"><div><label>Serviço</label><select id="qfs">${["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento","Outro"].map(s=>`<option>${s}</option>`).join("")}</select></div><div><label>Valor / peça</label><input id="qfv" type="number" step="0.01" value="0"></div></div>
+  <div class="grid2" style="margin-top:10px"><div><label>CNPJ (opcional)</label><input id="qfc"></div><div><label>Endereço (opcional)</label><input id="qfe"></div></div>
+  <button class="btn" style="width:100%;margin-top:12px" onclick="salvarQuickFaccao('${lid}',${i})">Salvar e usar</button>`);}
+function salvarQuickFaccao(lid,i){const nome=document.getElementById("qfn").value.trim();if(!nome){alert("Digite o nome da facção.");return;}
+  const nf={id:uid(),nome,servico:document.getElementById("qfs").value,valor:Number(document.getElementById("qfv").value)||0,cnpj:document.getElementById("qfc").value||"",endereco:document.getElementById("qfe").value||""};
+  S.faccoes.push(nf);const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];e.faccaoId=nf.id;if(!e.valor)e.valor=nf.valor;
+  l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Facção "${nome}" vinculada em ${e.nome}`});save();abrirLote(lid);toast("Facção criada e vinculada ✓");}
+function setLoteNum(id,c,v){S.lotes.find(x=>x.id===id)[c]=Number(v)||0;save();refreshLote(id);toast("Salvo ✓");}
+function setLoteTxt(id,c,v){S.lotes.find(x=>x.id===id)[c]=v;save();toast("Salvo ✓");}
+function setLoteFlag(id,c,v){const l=S.lotes.find(x=>x.id===id);l[c]=v;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:v?"Lote encerrado":"Lote reaberto"});save();refreshLote(id);}
+function addEtapa(id){const n=prompt("Nome da etapa (ex.: Estamparia, Embalagem):");if(!n)return;const l=S.lotes.find(x=>x.id===id);l.etapas.push({nome:n,faccaoId:"",valor:0,qtdEnv:0,qtdRet:0,dtEnv:"",dtRet:"",dtPrev:"",status:"Aberto",pago:false});l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Etapa adicionada: "+n});save();refreshLote(id);}
+function rmEtapa(id,i){const l=S.lotes.find(x=>x.id===id);if(confirm("Remover etapa "+l.etapas[i].nome+"?")){l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Etapa removida: "+l.etapas[i].nome});l.etapas.splice(i,1);save();refreshLote(id);}}
+function duplicarLote(id){const o=S.lotes.find(x=>x.id===id);const tot=totLote(o);
+  const l={id:uid(),numero:S.seq++,ref:o.ref,produto:o.produto,criadoEm:hoje(),foto:"",obs:o.obs||"",custoMP:o.custoMP||0,encerrado:false,gradeCores:JSON.parse(JSON.stringify(o.gradeCores||{})),
+    etapas:o.etapas.map((e,i)=>({nome:e.nome,faccaoId:e.faccaoId,valor:e.valor,qtdEnv:i===0?tot:0,qtdRet:0,dtEnv:i===0?hoje():"",dtRet:"",dtPrev:"",status:i===0?"Em produção":"Aberto",pago:false})),
+    historico:[{q:new Date().toLocaleString("pt-BR"),t:"Duplicado do lote #"+o.numero}]};
+  S.lotes.push(l);save();abrirLote(l.id);toast("Lote #"+l.numero+" duplicado");}
+function delLote(id){if(confirm("Excluir este lote?")){S.lotes=S.lotes.filter(x=>x.id!==id);save();closeSheet();render();}}
+
+// editar grade de lote existente
+function editarGrade(id){const l=S.lotes.find(x=>x.id===id);const cores=Object.keys(coresDe(l));const c=coresDe(l);
+  openSheet(`<button class="close" onclick="abrirLote('${id}')">×</button><h2>Editar grade — #${l.numero}</h2>
+    <div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody>
+    ${cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td><input type="number" id="eg_${cor}_${t}" value="${c[cor][t]||0}"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="hint" style="margin-top:10px">Editar a grade atualiza o total. Se o Corte ainda não foi concluído, a quantidade dele é reajustada.</div>
+    <button class="btn" style="width:100%" onclick="salvarGrade('${id}')">Salvar grade</button>`);}
+function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const gc={};Object.keys(coresDe(l)).forEach(cor=>{const g={};let has=false;TAMS.forEach(t=>{const v=Number((document.getElementById(`eg_${cor}_${t}`)||{}).value)||0;g[t]=v;if(v>0)has=true;});if(has)gc[cor]=g;});
+  l.gradeCores=gc;const tot=totLote(l);const corte=l.etapas.find(e=>e.nome==="Corte");if(corte&&corte.status!=="Concluído")corte.qtdEnv=tot;
+  l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
+
+// romaneio (direcionado a etapa opcional)
+function printRomaneio(id){const l=S.lotes.find(x=>x.id===id);const c=coresDe(l);const cores=Object.keys(c);
+  const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;
+  const em=S.empresa||{};const fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;
+  const header=`<div class="hdr"><div class="emit"><div class="nm">${em.nome||"Empresa"}</div>${em.cnpj?`<div>CNPJ: ${em.cnpj}</div>`:""}${em.endereco?`<div class="ad">${em.endereco}</div>`:""}</div>
+    <div class="dest"><div class="lb">DESTINATÁRIO / FACÇÃO</div>${fac?`<div class="nm">${fac.nome}</div>${fac.cnpj?`<div>CNPJ: ${fac.cnpj}</div>`:""}${fac.endereco?`<div class="ad">${fac.endereco}</div>`:""}${destino?`<div class="ad">Etapa: ${destino.nome}</div>`:""}`:`<div class="ln"></div><div class="ln"></div>`}</div></div>`;
+  const rows=cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("");
+  const foot=`<tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totLote(l)}</b></td></tr>`;
+  const w=window.open("","_blank");
+  w.document.write(`<html><head><title>Romaneio #${l.numero}</title><style>body{font-family:Arial;padding:22px;color:#111}h1{font-size:17px;margin:12px 0 4px}
+    .hdr{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #222;padding-bottom:8px}
+    .emit .nm{font-size:17px;font-weight:bold}.dest{text-align:right;min-width:240px}.dest .lb{font-size:10px;color:#666;letter-spacing:.5px}.dest .nm{font-weight:bold}
+    .ad{font-size:11px;color:#444}.dest .ln{border-bottom:1px solid #999;height:15px;margin-top:12px}
+    table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #888;padding:6px 8px;text-align:center}th{background:#eee}td:first-child,th:first-child{text-align:left}
+    .sig{margin-top:46px;display:flex;gap:40px}.sig div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:12px;text-align:center}</style></head>
+  <body>${header}<h1>Romaneio de Produção — Lote #${l.numero}</h1>
+  <div>Produto: <b>${l.produto}</b> ${l.ref?"("+l.ref+")":""} &nbsp;·&nbsp; Data: ${new Date().toLocaleDateString("pt-BR")} &nbsp;·&nbsp; Total: <b>${totLote(l)} peças</b></div>
+  <table><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}<th>Total</th></tr></thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>
+  <div class="sig"><div>Facção / Responsável</div><div>Data de entrega</div><div>Assinatura</div></div>
+  <scr`+`ipt>window.onload=function(){window.print()}<\/scr`+`ipt></body></html>`);w.document.close();}
+
+// backup
+function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
+function importBackup(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const x=JSON.parse(e.target.result);if(x&&x.lotes){S=x;save();render();toast("Backup importado");}else alert("Arquivo inválido");}catch(err){alert("Arquivo inválido");}};r.readAsText(f);}
+function exportCSV(){let csv="Lote;Produto;Ref;Cor;"+TAMS.join(";")+";Total;Status\n";S.lotes.forEach(l=>{const c=coresDe(l);Object.keys(c).forEach(cor=>{csv+=`#${l.numero};${l.produto};${l.ref};${corLabel(cor)};${TAMS.map(t=>c[cor][t]||0).join(";")};${totGrade(c[cor])};${statusLote(l)}\n`;});});
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="lotes_producao.csv";a.click();toast("CSV exportado");}
+function editEmpresa(){const e=S.empresa||{};openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>Dados da empresa</h2><div class="hint">Sai no topo de todo romaneio (você = remetente). Confira o CNPJ/entidade correta.</div>
+  <label>Nome / Razão social</label><input id="en" value="${e.nome||''}"><label style="margin-top:8px">CNPJ</label><input id="ec" value="${e.cnpj||''}"><label style="margin-top:8px">Endereço (opcional)</label><input id="ee" value="${e.endereco||''}">
+  <button class="btn" style="width:100%;margin-top:12px" onclick="salvarEmpresa()">Salvar</button>`);}
+function salvarEmpresa(){S.empresa={nome:document.getElementById("en").value,cnpj:document.getElementById("ec").value,endereco:document.getElementById("ee").value};save();closeSheet();render();toast("Salvo ✓");}
+
+// ---------- FACÇÕES (com editar) ----------
+function vFaccoes(){document.getElementById("app").innerHTML=`<div class="hint">No app final, esta lista é <b>puxada do Bling</b>. Aqui você cadastra à mão.</div>
+  <div class="between" style="margin-bottom:10px"><h2 style="margin:0">Facções</h2><button class="btn" onclick="editFaccao()">+ Nova</button></div>
+  ${S.faccoes.map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span><button class="btn mini sec" onclick="editFaccao('${f.id}')">editar</button> <button class="btn mini red" onclick="delFaccao('${f.id}')">excluir</button></span></div><div class="muted">${f.servico} · ${money(f.valor)}/peça</div></div>`).join("")}`;}
+function editFaccao(id){const f=id?S.faccoes.find(x=>x.id===id):{nome:"",servico:"Costura",valor:0,cnpj:"",endereco:""};
+  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>${id?"Editar":"Nova"} facção</h2><label>Nome</label><input id="fn" value="${f.nome}">
+  <div class="grid2" style="margin-top:10px"><div><label>Serviço</label><select id="fs">${["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento","Outro"].map(s=>`<option ${s===f.servico?"selected":""}>${s}</option>`).join("")}</select></div><div><label>Valor / peça</label><input id="fv" type="number" step="0.01" value="${f.valor}"></div></div>
+  <div class="grid2" style="margin-top:10px"><div><label>CNPJ (opcional)</label><input id="fcnpj" value="${f.cnpj||''}"></div><div><label>Endereço (opcional)</label><input id="fend" value="${f.endereco||''}"></div></div>
+  <button class="btn" style="width:100%;margin-top:12px" onclick="salvarFaccao('${id||''}')">Salvar</button>`);}
+function salvarFaccao(id){const dados={nome:document.getElementById("fn").value||"Facção",servico:document.getElementById("fs").value,valor:Number(document.getElementById("fv").value)||0,cnpj:document.getElementById("fcnpj").value||"",endereco:document.getElementById("fend").value||""};
+  if(id){Object.assign(S.faccoes.find(x=>x.id===id),dados);}else{S.faccoes.push({id:uid(),...dados});}save();closeSheet();render();toast("Salvo ✓");}
+function delFaccao(id){if(confirm("Excluir facção?")){S.faccoes=S.faccoes.filter(x=>x.id!==id);save();render();}}
+
+// ---------- FINANCEIRO ----------
+function finPorFaccao(){const map={};S.lotes.forEach(l=>l.etapas.forEach(e=>{if(!e.faccaoId)return;const base=(Number(e.qtdEnv)||0)*(Number(e.valor)||0);if(base<=0)return;
+    map[e.faccaoId]=map[e.faccaoId]||{faccaoId:e.faccaoId,total:0,pendente:0,itens:[]};map[e.faccaoId].total+=base;if(!e.pago)map[e.faccaoId].pendente+=base;
+    map[e.faccaoId].itens.push({lote:l.numero,etapa:e.nome,q:e.qtdEnv,v:e.valor,base,pago:e.pago,ref:{lid:l.id,nome:e.nome}});}));return Object.values(map);}
+function perdaFaccao(fid){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(e.faccaoId===fid&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
+function vFin(){const dados=finPorFaccao(),totalPend=dados.reduce((s,f)=>s+f.pendente,0);
+  document.getElementById("app").innerHTML=`<div class="card"><div class="between"><h2 style="margin:0">Fechamento por facção</h2><b class="tot" style="color:var(--acc)">${money(totalPend)}</b></div><div class="muted">Total pendente. No app final, gera a conta a pagar no Bling.</div></div>
+  ${dados.map(f=>`<div class="card"><div class="between"><b>${fName(f.faccaoId)}</b><span>Pendente: <b style="color:var(--acc)">${money(f.pendente)}</b></span></div>
+    <table><tr><th>Lote</th><th>Etapa</th><th class="right">Qtd</th><th class="right">Valor</th><th class="right">Total</th><th></th></tr>
+    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td class="right">${it.q}</td><td class="right">${money(it.v)}</td><td class="right">${money(it.base)}</td><td class="right">${it.pago?'<span class="pill p-ok">pago</span>':`<button class="btn mini" onclick="marcarPago('${it.ref.lid}','${it.ref.nome}')">baixar</button>`}</td></tr>`).join("")}</table>
+    ${(()=>{const p=perdaFaccao(f.faccaoId);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
+    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="alert('No app final: gera a conta a pagar desta facção no Bling. E dá pra consolidar o mês numa NF só (Fase 2).')">Gerar no Bling</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
+
+function openSheet(h){document.getElementById("sheet").innerHTML=h;document.getElementById("modal").classList.add("on");}
+function closeSheet(){document.getElementById("modal").classList.remove("on");}
+document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeSheet();});
+render();
+bootSync();
+</script>
+</body>
+</html>
