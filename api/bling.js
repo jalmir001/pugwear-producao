@@ -9,8 +9,8 @@ const TIPO_FORNECEDOR = 2759122975;
 const PORTADOR_CAIXA = 2759123137;
 const TAMS = ['P', 'M', 'G', 'GG', 'G1', 'G2'];
 
-const SB_URL = process.env.SUPABASE_URL;
-const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SB_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+const SB_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim();
 
 function cors(res, origin) {
   res.setHeader('Access-Control-Allow-Origin', origin || '*');
@@ -106,14 +106,17 @@ export default async function handler(req, res) {
 
   // ---- diagnóstico rápido (não exige token do Bling) ----
   if (action === 'diag') {
-    const g = await sbGetToken();
-    return res.status(200).json({
-      supabaseStatus: g.status,
-      achouLinha: !!g.row,
-      temRefresh: !!(g.row && g.row.refresh_token),
-      envUrlOk: !!SB_URL, envKeyOk: !!SB_KEY,
-      body: g.row ? undefined : g.raw
-    });
+    const info = { envUrl: SB_URL, urlLen: SB_URL.length, keyLen: SB_KEY.length, keyOk: SB_KEY.startsWith('sb_secret_') };
+    try {
+      const r = await fetch(SB_URL + '/rest/v1/bling_token?id=eq.main&select=id,refresh_token', { headers: { apikey: SB_KEY } });
+      info.supabaseStatus = r.status;
+      const t = await r.text();
+      info.temRefresh = t.includes('refresh_token');
+      info.bodyPreview = t.replace(/[A-Za-z0-9_-]{25,}/g, '[...]').slice(0, 160);
+    } catch (e) {
+      info.fetchErro = String((e && e.cause && e.cause.message) || (e && e.message) || e);
+    }
+    return res.status(200).json(info);
   }
 
   // ---- demais ações exigem o segredo do app ----
