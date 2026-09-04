@@ -74,6 +74,7 @@ async function bfetch(path, token, opts = {}) {
 }
 
 export default async function handler(req, res) {
+ try {
   cors(res, req.headers.origin);
   if (req.method === 'OPTIONS') return res.status(204).end();
   const action = (req.query.action || '').toString();
@@ -183,4 +184,8 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ erro: 'falha', detalhe: String(e.message || e) });
   }
+ } catch (fatal) {
+  try { return res.status(200).json({ crashCapturado: String(fatal && (fatal.stack || fatal.message || fatal)) }); }
+  catch (_) { return; }
+ }
 }
