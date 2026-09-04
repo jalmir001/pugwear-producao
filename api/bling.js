@@ -1,7 +1,7 @@
 // Backend seguro Pug Wear -> Bling (função serverless Vercel)
 // Guarda o token do Bling no Supabase (tabela protegida) e renova sozinho.
-// Ações: oauth (seed), faccoes, faccao, produto, conta-pagar.
-import { createClient } from '@supabase/supabase-js';
+// Usa REST puro do Supabase com a secret key só no header "apikey".
+// Ações: oauth (seed), faccoes, faccao, produto, conta-pagar, nfse.
 
 const BLING_API = 'https://api.bling.com.br/Api/v3';
 const BLING_WWW = 'https://www.bling.com.br/Api/v3';
@@ -9,40 +9,57 @@ const TIPO_FORNECEDOR = 2759122975;
 const PORTADOR_CAIXA = 2759123137;
 const TAMS = ['P', 'M', 'G', 'GG', 'G1', 'G2'];
 
+const SB_URL = process.env.SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+
 function cors(res, origin) {
-  // Em produção, restringir ao domínio do app. '*' aqui é combinado com o x-app-secret.
   res.setHeader('Access-Control-Allow-Origin', origin || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-app-secret');
-}
-
-function db() {
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
 }
 
 function basicAuth() {
   return 'Basic ' + Buffer.from(process.env.BLING_CLIENT_ID + ':' + process.env.BLING_CLIENT_SECRET).toString('base64');
 }
 
+// ---- Supabase REST (secret key só no header apikey) ----
+async function sbGetToken() {
+  const r = await fetch(SB_URL + '/rest/v1/bling_token?id=eq.main&select=*', { headers: { apikey: SB_KEY } });
+  const txt = await r.text();
+  let arr; try { arr = JSON.parse(txt); } catch (e) { arr = null; }
+  return { status: r.status, row: (Array.isArray(arr) && arr[0]) ? arr[0] : null, raw: txt.slice(0, 160) };
+}
+async function sbSaveToken(obj) {
+  const r = await fetch(SB_URL + '/rest/v1/bling_token', {
+    method: 'POST',
+    headers: { apikey: SB_KEY, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id: 'main', ...obj })
+  });
+  return r.status;
+}
+
 async function getToken() {
-  const sb = db();
-  const { data } = await sb.from('bling_token').select('*').eq('id', 'main').maybeSingle();
-  if (!data || !data.refresh_token) throw new Error('token_nao_configurado');
-  const restante = data.expires_at ? (new Date(data.expires_at).getTime() - Date.now()) : 0;
-  if (data.access_token && restante > 120000) return data.access_token;
+  const g = await sbGetToken();
+  if (!g.row || !g.row.refresh_token) {
+    const e = new Error('token_nao_configurado');
+    e.diag = 'supabase status=' + g.status + ' body=' + g.raw;
+    throw e;
+  }
+  const restante = g.row.expires_at ? (new Date(g.row.expires_at).getTime() - Date.now()) : 0;
+  if (g.row.access_token && restante > 120000) return g.row.access_token;
   // renova
   const r = await fetch(BLING_API + '/oauth/token', {
     method: 'POST',
     headers: { 'Authorization': basicAuth(), 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: data.refresh_token })
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: g.row.refresh_token })
   });
   const j = await r.json();
-  if (!j.access_token) throw new Error('refresh_falhou: ' + JSON.stringify(j));
-  await sb.from('bling_token').update({
+  if (!j.access_token) { const e = new Error('refresh_falhou'); e.diag = JSON.stringify(j).slice(0, 160); throw e; }
+  await sbSaveToken({
     access_token: j.access_token,
-    refresh_token: j.refresh_token || data.refresh_token,
+    refresh_token: j.refresh_token || g.row.refresh_token,
     expires_at: new Date(Date.now() + (j.expires_in - 60) * 1000).toISOString()
-  }).eq('id', 'main');
+  });
   return j.access_token;
 }
 
@@ -61,7 +78,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   const action = (req.query.action || '').toString();
 
-  // ---- Seed do OAuth (uma vez): abrir /api/bling?action=oauth no navegador logado no Bling ----
+  // ---- Seed do OAuth (uma vez) ----
   if (action === 'oauth') {
     const code = (req.query.code || '').toString();
     if (!code) {
@@ -78,13 +95,24 @@ export default async function handler(req, res) {
     });
     const j = await r.json();
     if (!j.access_token) return res.status(400).send('<h3>Falha ao conectar</h3><pre>' + JSON.stringify(j, null, 2) + '</pre>');
-    await db().from('bling_token').upsert({
-      id: 'main',
+    await sbSaveToken({
       access_token: j.access_token,
       refresh_token: j.refresh_token,
       expires_at: new Date(Date.now() + (j.expires_in - 60) * 1000).toISOString()
     });
     return res.status(200).send('<h2>Bling conectado com sucesso ✓</h2><p>Pode fechar esta aba e voltar ao app.</p>');
+  }
+
+  // ---- diagnóstico rápido (não exige token do Bling) ----
+  if (action === 'diag') {
+    const g = await sbGetToken();
+    return res.status(200).json({
+      supabaseStatus: g.status,
+      achouLinha: !!g.row,
+      temRefresh: !!(g.row && g.row.refresh_token),
+      envUrlOk: !!SB_URL, envKeyOk: !!SB_KEY,
+      body: g.row ? undefined : g.raw
+    });
   }
 
   // ---- demais ações exigem o segredo do app ----
@@ -94,18 +122,15 @@ export default async function handler(req, res) {
 
   let token;
   try { token = await getToken(); }
-  catch (e) { return res.status(500).json({ erro: 'token', detalhe: String(e.message || e) }); }
+  catch (e) { return res.status(500).json({ erro: 'token', detalhe: String(e.message || e), diag: e.diag || null }); }
 
   try {
-    // ---- Facções: busca contatos por nome (o usuário escolhe) ----
     if (action === 'faccoes') {
       const q = (req.query.q || '').toString();
       const { body } = await bfetch('/contatos?limite=100&pagina=1' + (q ? ('&pesquisa=' + encodeURIComponent(q)) : ''), token);
       const lista = (body.data || []).map(c => ({ id: c.id, nome: c.nome, doc: c.numeroDocumento || '' }));
       return res.status(200).json({ faccoes: lista });
     }
-
-    // ---- Detalhe de uma facção: CNPJ + endereço + se é fornecedor ----
     if (action === 'faccao') {
       const id = (req.query.id || '').toString();
       const { body } = await bfetch('/contatos/' + id, token);
@@ -115,8 +140,6 @@ export default async function handler(req, res) {
       const fornecedor = (c.tiposContato || []).some(t => t.id === TIPO_FORNECEDOR);
       return res.status(200).json({ id: c.id, nome: c.nome, cnpj: c.numeroDocumento || '', endereco, fornecedor });
     }
-
-    // ---- Catálogo: monta a grade de cores a partir da referência (ex.: C-BP-001) ----
     if (action === 'produto') {
       const ref = (req.query.ref || '').toString().trim();
       if (!ref) return res.status(400).json({ erro: 'ref_vazia' });
@@ -127,7 +150,7 @@ export default async function handler(req, res) {
         const arr = body.data || [];
         for (const p of arr) {
           if (p.formato !== 'S' || !p.codigo || !p.codigo.startsWith(ref + '-')) continue;
-          const resto = p.codigo.slice(ref.length + 1);      // "Cor-Tam"
+          const resto = p.codigo.slice(ref.length + 1);
           const partes = resto.split('-');
           const tam = partes[partes.length - 1];
           const cor = partes.slice(0, -1).join('-');
@@ -141,8 +164,6 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, tamanhos: TAMS });
     }
-
-    // ---- Fechamento -> conta a pagar no Bling ----
     if (action === 'conta-pagar' && req.method === 'POST') {
       const b = req.body || {};
       const payload = {
@@ -155,12 +176,9 @@ export default async function handler(req, res) {
       const { status, body } = await bfetch('/contas/pagar', token, { method: 'POST', body: JSON.stringify(payload) });
       return res.status(status).json(body);
     }
-
-    // ---- NFS-e (NF-e de serviço): PENDENTE de config fiscal (certificado + prefeitura + ISS) ----
     if (action === 'nfse') {
-      return res.status(501).json({ erro: 'nfse_pendente', detalhe: 'NFS-e depende de config fiscal no Bling (certificado digital, prefeitura, código de serviço/ISS). Validar com contador antes de emitir.' });
+      return res.status(501).json({ erro: 'nfse_pendente', detalhe: 'NFS-e depende de config fiscal no Bling (certificado, prefeitura, ISS). Validar com contador.' });
     }
-
     return res.status(400).json({ erro: 'acao_invalida' });
   } catch (e) {
     return res.status(500).json({ erro: 'falha', detalhe: String(e.message || e) });
