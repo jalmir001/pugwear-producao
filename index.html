@@ -113,11 +113,56 @@ async function cloudPull(){
   }catch(e){setSB("⚠ salvo só neste aparelho");}
 }
 function bootSync(){
+  if(window.__booted)return; window.__booted=true;
   const b=document.createElement("div");b.id="sbst";
   b.style.cssText="position:fixed;bottom:10px;right:10px;font-size:11px;background:#000a;color:#fff;padding:4px 9px;border-radius:12px;z-index:9999;opacity:.9;font-family:inherit";
   document.body.appendChild(b);
   cloudPull();
   window.addEventListener("focus",cloudPull);
+}
+
+/* ---------- Login (Supabase Auth) ---------- */
+async function startApp(){
+  if(!sb){ render(); bootSync(); return; }
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){ mostrarApp(); } else { mostrarLogin(); }
+    sb.auth.onAuthStateChange((_e,s)=>{ if(s){ mostrarApp(); } else { mostrarLogin(); } });
+  }catch(e){ render(); bootSync(); }
+}
+function mostrarApp(){
+  const ov=document.getElementById("loginOv"); if(ov)ov.remove();
+  render(); bootSync(); addLogoutBtn();
+}
+function mostrarLogin(){
+  if(document.getElementById("loginOv"))return;
+  const ov=document.createElement("div"); ov.id="loginOv";
+  ov.style.cssText="position:fixed;inset:0;background:var(--bg);z-index:10000;display:grid;place-items:center;padding:20px";
+  ov.innerHTML=`<div style="width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><div style="width:32px;height:32px;border-radius:8px;background:var(--acc);display:grid;place-items:center;color:#04120a;font-weight:800">P</div><b style="font-size:16px">Pug Wear — Produção</b></div>
+    <div class="muted" style="margin-bottom:14px">Entre com seu e-mail e senha.</div>
+    <label>E-mail</label><input id="lgEmail" type="email" autocomplete="username" style="margin-bottom:10px">
+    <label>Senha</label><input id="lgPass" type="password" autocomplete="current-password" style="margin-bottom:14px">
+    <button class="btn" style="width:100%" onclick="fazerLogin()">Entrar</button>
+    <div id="lgErr" style="color:var(--red);font-size:12px;margin-top:10px;min-height:14px"></div>
+  </div>`;
+  document.body.appendChild(ov);
+  const p=document.getElementById("lgPass"); if(p)p.addEventListener("keydown",e=>{ if(e.key==="Enter")fazerLogin(); });
+}
+async function fazerLogin(){
+  const email=(document.getElementById("lgEmail").value||"").trim();
+  const password=document.getElementById("lgPass").value||"";
+  const err=document.getElementById("lgErr"); err.textContent="Entrando…";
+  try{
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    err.textContent = error ? "E-mail ou senha inválidos." : "";
+  }catch(e){ err.textContent="Erro ao entrar. Tente de novo."; }
+}
+function addLogoutBtn(){
+  const h=document.querySelector("header"); if(!h||document.getElementById("logoutBtn"))return;
+  const b=document.createElement("button"); b.id="logoutBtn"; b.className="btn sec mini"; b.textContent="Sair";
+  b.style.cssText="margin-left:auto"; b.onclick=async()=>{ try{ await sb.auth.signOut(); }catch(e){} location.reload(); };
+  h.appendChild(b);
 }
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),1600);}
 function seed(){
@@ -350,8 +395,7 @@ function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etap
 function openSheet(h){document.getElementById("sheet").innerHTML=h;document.getElementById("modal").classList.add("on");}
 function closeSheet(){document.getElementById("modal").classList.remove("on");}
 document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeSheet();});
-render();
-bootSync();
+startApp();
 </script>
 </body>
 </html>
