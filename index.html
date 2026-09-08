@@ -93,6 +93,16 @@ const SB_KEY="sb_publishable_xj_6LaksupDHWetrHhtYtw_y1UlSy74";
 const SB_ROW="pugwear";
 let sb=null; try{ sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){}
 let _pushT=null;
+
+/* ---------- Ponte com o Bling (backend Vercel) ---------- */
+const BLING_BASE="https://pugwear-producao.vercel.app/api/bling";
+const APP_SECRET="pw_9f3k7Qz2Lm8Xr4Tn6Bv1Hs";
+async function blingApi(action,params={},opts={}){
+  const qs=new URLSearchParams({action,...params}).toString();
+  const r=await fetch(BLING_BASE+"?"+qs,{...opts,headers:{"x-app-secret":APP_SECRET,...(opts.headers||{})}});
+  let data={}; try{data=await r.json();}catch(e){}
+  return {status:r.status,data};
+}
 function setSB(t){const e=document.getElementById("sbst");if(e)e.textContent=t;}
 function cloudPush(){
   if(!sb)return; clearTimeout(_pushT); setSB("sincronizando…");
@@ -228,6 +238,7 @@ function novoLote(){_fotoPend="";_ref="";_etSel=ETAPAS_PADRAO.slice();
     <div class="row" style="margin-bottom:10px"><button class="btn sec" style="flex:1" onclick="document.getElementById('fCam').click()">📷 Tirar foto</button><button class="btn sec" style="flex:1" onclick="document.getElementById('fImg').click()">🖼️ Adicionar imagem</button></div>
     <input id="fCam" type="file" accept="image/*" capture="environment" style="display:none" onchange="lerFoto(this)"><input id="fImg" type="file" accept="image/*" style="display:none" onchange="lerFoto(this)"><div id="fotoPrev"></div>
     <div class="grid2"><div><label>Referência</label><input id="ref" list="refs" placeholder="C-BP-001" oninput="onRef(this.value)"><datalist id="refs">${refs}</datalist></div><div><label>Nome do produto</label><input id="pnome" placeholder="(preenche sozinho)"></div></div>
+    <button class="btn sec mini" type="button" style="margin-top:8px" onclick="puxarCatalogo()">⬇️ Puxar cores do Bling</button>
     <div id="gradeArea" style="margin-top:12px"></div>
     <label style="margin-top:12px">Etapas do roteiro (marque as que este lote tem)</label><div id="etChips">${chipsEt()}</div>
     <label style="margin-top:10px">Observações</label><textarea id="lobs" rows="2" placeholder="Ex.: usar linha X, prazo apertado…"></textarea>
@@ -241,6 +252,19 @@ function onRef(v){_ref=v;const cat=CATALOGO[v.trim()];const area=document.getEle
       <tfoot><tr><td>Total</td>${cat.tams.map(t=>`<td id="colt_${t}">0</td>`).join("")}</tr></tfoot></table></div>
       <div class="between" style="margin-top:6px"><span class="muted">Só cores com quantidade viram lote.</span><b id="gtot" style="color:var(--acc)">0 pç</b></div>`;
   }else{area.innerHTML=`<label>Cor</label><input id="corManual" placeholder="Ex.: Grafite"><label style="margin-top:8px">Grade</label><div class="gwrap"><table class="g"><thead><tr><th>Tam</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody><tr><td>Qtd</td>${TAMS.map(t=>`<td><input type="number" id="gm_${t}" placeholder="0"></td>`).join("")}</tr></tbody></table></div>`;}
+}
+async function puxarCatalogo(){
+  const ref=(document.getElementById("ref").value||"").trim();
+  if(!ref){alert("Digite a referência primeiro (ex.: C-BP-001).");return;}
+  const area=document.getElementById("gradeArea");
+  area.innerHTML=`<div class="muted">Puxando cores do Bling…</div>`;
+  try{
+    const {status,data}=await blingApi("produto",{ref});
+    if(status!==200||!data.cores||!data.cores.length){area.innerHTML=`<div class="muted">Não encontrei cores pra "${ref}" no Bling. Confira a referência ou preencha manual.</div>`;return;}
+    CATALOGO[ref]={nome:data.produto||ref,cores:data.cores,tams:data.tamanhos||TAMS};
+    if(data.produto)document.getElementById("pnome").value=data.produto;
+    onRef(ref);toast(data.cores.length+" cores puxadas do Bling ✓");
+  }catch(e){area.innerHTML=`<div class="muted">Erro ao puxar do Bling. Tente de novo.</div>`;}
 }
 function somaGrade(){const cat=CATALOGO[(_ref||"").trim()];if(!cat)return;let tot=0;cat.tams.forEach(t=>{let ct=0;cat.cores.forEach(c=>{ct+=Number((document.getElementById(`gc_${c}_${t}`)||{}).value)||0;});document.getElementById("colt_"+t).textContent=ct;tot+=ct;});document.getElementById("gtot").textContent=tot+" pç";}
 function lerGradeEntrada(prefixCat){const ref=(document.getElementById("ref").value||"").trim();const cat=CATALOGO[ref];const gradeCores={};
@@ -370,12 +394,41 @@ function vFaccoes(){document.getElementById("app").innerHTML=`<div class="hint">
   <div class="between" style="margin-bottom:10px"><h2 style="margin:0">Facções</h2><button class="btn" onclick="editFaccao()">+ Nova</button></div>
   ${S.faccoes.map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span><button class="btn mini sec" onclick="editFaccao('${f.id}')">editar</button> <button class="btn mini red" onclick="delFaccao('${f.id}')">excluir</button></span></div><div class="muted">${f.servico} · ${money(f.valor)}/peça</div></div>`).join("")}`;}
 function editFaccao(id){const f=id?S.faccoes.find(x=>x.id===id):{nome:"",servico:"Costura",valor:0,cnpj:"",endereco:""};
-  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>${id?"Editar":"Nova"} facção</h2><label>Nome</label><input id="fn" value="${f.nome}">
+  _faccaoBlingId=f.blingId||"";
+  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>${id?"Editar":"Nova"} facção</h2>
+  <div class="card" style="background:var(--card2);margin-bottom:10px"><label>Buscar no Bling (traz CNPJ e endereço)</label>
+    <div class="row"><input id="fbusca" placeholder="Nome no Bling (ex.: Fn)" style="flex:1"><button class="btn sec mini" type="button" onclick="buscarFaccaoBling()">🔎 Buscar</button></div>
+    <div id="fresult" class="muted" style="margin-top:6px"></div></div>
+  <label>Nome</label><input id="fn" value="${f.nome}">
   <div class="grid2" style="margin-top:10px"><div><label>Serviço</label><select id="fs">${["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento","Outro"].map(s=>`<option ${s===f.servico?"selected":""}>${s}</option>`).join("")}</select></div><div><label>Valor / peça</label><input id="fv" type="number" step="0.01" value="${f.valor}"></div></div>
   <div class="grid2" style="margin-top:10px"><div><label>CNPJ (opcional)</label><input id="fcnpj" value="${f.cnpj||''}"></div><div><label>Endereço (opcional)</label><input id="fend" value="${f.endereco||''}"></div></div>
   <button class="btn" style="width:100%;margin-top:12px" onclick="salvarFaccao('${id||''}')">Salvar</button>`);}
-function salvarFaccao(id){const dados={nome:document.getElementById("fn").value||"Facção",servico:document.getElementById("fs").value,valor:Number(document.getElementById("fv").value)||0,cnpj:document.getElementById("fcnpj").value||"",endereco:document.getElementById("fend").value||""};
+let _faccaoBlingId="";
+function salvarFaccao(id){const dados={nome:document.getElementById("fn").value||"Facção",servico:document.getElementById("fs").value,valor:Number(document.getElementById("fv").value)||0,cnpj:document.getElementById("fcnpj").value||"",endereco:document.getElementById("fend").value||"",blingId:_faccaoBlingId||""};
   if(id){Object.assign(S.faccoes.find(x=>x.id===id),dados);}else{S.faccoes.push({id:uid(),...dados});}save();closeSheet();render();toast("Salvo ✓");}
+async function buscarFaccaoBling(){
+  const q=(document.getElementById("fbusca").value||"").trim();
+  const box=document.getElementById("fresult");
+  if(!q){box.textContent="Digite um nome pra buscar.";return;}
+  box.textContent="Buscando…";
+  try{
+    const {status,data}=await blingApi("faccoes",{q});
+    const lista=(data.faccoes||[]);
+    if(status!==200||!lista.length){box.textContent="Nada encontrado pra \""+q+"\".";return;}
+    box.innerHTML=lista.slice(0,8).map(c=>`<div class="row" style="justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)"><span>${c.nome}${c.doc?` <span class="muted">(${c.doc})</span>`:""}</span><button class="btn sec mini" type="button" onclick="usarFaccaoBling(${c.id},'${(c.nome||'').replace(/'/g,'')}')">usar</button></div>`).join("");
+  }catch(e){box.textContent="Erro na busca. Tente de novo.";}
+}
+async function usarFaccaoBling(id,nome){
+  _faccaoBlingId=String(id);
+  document.getElementById("fn").value=nome;
+  const box=document.getElementById("fresult");box.textContent="Puxando CNPJ/endereço…";
+  try{
+    const {data}=await blingApi("faccao",{id});
+    if(data.cnpj)document.getElementById("fcnpj").value=data.cnpj;
+    if(data.endereco)document.getElementById("fend").value=data.endereco;
+    box.innerHTML=`✓ Vinculado ao Bling${data.fornecedor?" (fornecedor)":""}. Confira e salve.`;
+  }catch(e){box.textContent="Vinculado, mas não consegui puxar CNPJ/endereço.";}
+}
 function delFaccao(id){if(confirm("Excluir facção?")){S.faccoes=S.faccoes.filter(x=>x.id!==id);save();render();}}
 
 // ---------- FINANCEIRO ----------
@@ -389,7 +442,24 @@ function vFin(){const dados=finPorFaccao(),totalPend=dados.reduce((s,f)=>s+f.pen
     <table><tr><th>Lote</th><th>Etapa</th><th class="right">Qtd</th><th class="right">Valor</th><th class="right">Total</th><th></th></tr>
     ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td class="right">${it.q}</td><td class="right">${money(it.v)}</td><td class="right">${money(it.base)}</td><td class="right">${it.pago?'<span class="pill p-ok">pago</span>':`<button class="btn mini" onclick="marcarPago('${it.ref.lid}','${it.ref.nome}')">baixar</button>`}</td></tr>`).join("")}</table>
     ${(()=>{const p=perdaFaccao(f.faccaoId);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
-    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="alert('No app final: gera a conta a pagar desta facção no Bling. E dá pra consolidar o mês numa NF só (Fase 2).')">Gerar no Bling</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.faccaoId}')">🧾 Gerar conta a pagar no Bling</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+async function gerarContaPagar(faccaoId){
+  const f=S.faccoes.find(x=>x.id===faccaoId); if(!f){return;}
+  const fin=finPorFaccao().find(x=>x.faccaoId===faccaoId); if(!fin||fin.pendente<=0){alert("Não há valor pendente para esta facção.");return;}
+  if(!f.blingId){alert("Esta facção não está vinculada ao Bling. Edite a facção e use \"Buscar no Bling\" pra vincular antes de gerar a conta.");return;}
+  const venc=prompt("Vencimento da conta (AAAA-MM-DD):",hoje()); if(!venc)return;
+  if(!confirm(`Gerar conta a pagar no Bling?\n\nFacção: ${f.nome}\nValor: ${money(fin.pendente)}\nVencimento: ${venc}`))return;
+  toast("Gerando no Bling…");
+  try{
+    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,valor:fin.pendente,vencimento:venc,historico:"Produção — "+f.nome})});
+    if(status>=200&&status<300&&data&&data.data&&data.data.id){
+      f.itensPagos=(f.itensPagos||0); // marcador simples
+      alert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")");
+    } else {
+      alert("Não consegui criar a conta no Bling.\n"+(JSON.stringify(data).slice(0,200)));
+    }
+  }catch(e){alert("Erro ao falar com o Bling. Tente de novo.");}
+}
 function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
 
 function openSheet(h){document.getElementById("sheet").innerHTML=h;document.getElementById("modal").classList.add("on");}
