@@ -321,7 +321,41 @@ function stepHtml(l,e,i){const val=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);co
       <div><label>Previsão (retorno)</label><input type="date" value="${e.dtPrev||''}" onchange="setEt('${l.id}',${i},'dtPrev',this.value)"></div>
     </div>
     <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b>${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}</span>
-      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div></div>`;}
+      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>${divisaoHtml(l,e,i)}</div>`;}
+function totPartes(grade){return Object.values(grade||{}).reduce((s,g)=>s+totGrade(g),0);}
+function divisaoHtml(l,e,i){
+  const has=e.partes&&e.partes.length;
+  let h=`<div style="margin-top:8px">`;
+  if(has){
+    h+=`<div class="muted" style="margin-bottom:4px">✂️ Etapa dividida (os campos acima são ignorados):</div>`;
+    h+=e.partes.map((p,pi)=>{const q=totPartes(p.grade);const cst=q*(Number(p.valor)||0);
+      return `<div class="card" style="background:var(--card2);margin:4px 0"><div class="between"><b>${fName(p.faccaoId)}</b><span>${q} pç · ${money(cst)}</span></div>
+      <div class="muted" style="font-size:11px">${Object.keys(p.grade||{}).map(c=>corLabel(c)+" ("+totGrade(p.grade[c])+")").join(", ")}</div>
+      <div class="between" style="margin-top:6px"><button class="btn mini sec" onclick="printRomaneioParte('${l.id}',${i},${pi})">🖨️ Romaneio</button>${p.pago?'<span class="pill p-ok">pago</span>':`<button class="btn mini" onclick="pagarParte('${l.id}',${i},${pi})">baixar</button>`}</div></div>`;}).join("");
+    h+=`<div class="row" style="margin-top:4px"><button class="btn sec mini" onclick="dividirEtapa('${l.id}',${i})">✏️ Editar divisão</button><button class="btn mini red" onclick="removerDivisao('${l.id}',${i})">Remover divisão</button></div>`;
+  }else{
+    h+=`<button class="btn sec mini" onclick="dividirEtapa('${l.id}',${i})">✂️ Dividir entre facções</button>`;
+  }
+  return h+`</div>`;
+}
+function dividirEtapa(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const cores=Object.keys(c0);
+  const atual={};(e.partes||[]).forEach(p=>Object.keys(p.grade||{}).forEach(c=>atual[c]=p.faccaoId));
+  const opt=sel=>`<option value="">—</option>`+S.faccoes.map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${x.nome}</option>`).join("");
+  openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button><h2>Dividir "${e.nome}"</h2>
+    <div class="hint">Escolha qual facção faz cada cor. Cada facção vira uma parte com romaneio e valor próprios. (Divisão por cor.)</div>
+    ${cores.map(c=>`<div class="between" style="margin:8px 0"><b>${corLabel(c)} <span class="muted">(${totGrade(c0[c])} pç)</span></b><select id="dv_${c}" style="width:auto;padding:6px 8px">${opt(atual[c]||"")}</select></div>`).join("")}
+    <button class="btn" style="width:100%;margin-top:12px" onclick="salvarDivisao('${lid}',${i})">Salvar divisão</button>`);}
+function salvarDivisao(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const grupos={};
+  Object.keys(c0).forEach(c=>{const fid=(document.getElementById("dv_"+c)||{}).value||"";if(!fid)return;
+    if(!grupos[fid]){const f=S.faccoes.find(x=>x.id===fid);grupos[fid]={faccaoId:fid,valor:f?f.valor:0,grade:{},status:"Em produção",pago:false};}
+    grupos[fid].grade[c]=Object.assign({},c0[c]);});
+  const partes=Object.values(grupos);
+  if(!partes.length){alert("Escolha ao menos uma facção pra alguma cor.");return;}
+  e.partes=partes;if(!e.dtEnv)e.dtEnv=hoje();if(e.status==="Aberto")e.status="Em produção";
+  l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome} dividida em ${partes.length} facção(ões)`});
+  save();abrirLote(lid);toast("Divisão salva ✓");}
+function removerDivisao(lid,i){const l=S.lotes.find(x=>x.id===lid);if(confirm("Remover a divisão desta etapa?")){delete l.etapas[i].partes;save();abrirLote(lid);toast("Divisão removida");}}
+function pagarParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);l.etapas[i].partes[pi].pago=true;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${l.etapas[i].nome} / ${fName(l.etapas[i].partes[pi].faccaoId)}`});save();abrirLote(lid);toast("Baixado ✓");}
 function setEt(lid,i,campo,val){if(campo==="faccaoId"&&val==="__new"){quickFaccao(lid,i);return;}const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const antes=e[campo];
   e[campo]=(["valor","qtdEnv","qtdRet"].includes(campo))?Number(val)||0:val;
   if(campo==="status"&&antes!==val){e.dtRet=val==="Concluído"&&!e.dtRet?hoje():e.dtRet;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome}: ${val}`+(e.faccaoId?` (${fName(e.faccaoId)})`:"")});}
@@ -359,13 +393,17 @@ function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const gc={};Object.k
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
 
 // romaneio (direcionado a etapa opcional)
-function printRomaneio(id){const l=S.lotes.find(x=>x.id===id);const c=coresDe(l);const cores=Object.keys(c);
-  const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;
-  const em=S.empresa||{};const fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;
+function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:p.grade,faccaoId:p.faccaoId,etapaNome:e.nome});}
+function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
+  let c,fac,destNome;
+  if(override){c=override.cores||{};fac=override.faccaoId?S.faccoes.find(x=>x.id===override.faccaoId):null;destNome=override.etapaNome||null;}
+  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;}
+  const cores=Object.keys(c);const totalPecas=cores.reduce((s,cor)=>s+totGrade(c[cor]),0);
+  const em=S.empresa||{};
   const header=`<div class="hdr"><div class="emit"><div class="nm">${em.nome||"Empresa"}</div>${em.cnpj?`<div>CNPJ: ${em.cnpj}</div>`:""}${em.endereco?`<div class="ad">${em.endereco}</div>`:""}</div>
-    <div class="dest"><div class="lb">DESTINATÁRIO / FACÇÃO</div>${fac?`<div class="nm">${fac.nome}</div>${fac.cnpj?`<div>CNPJ: ${fac.cnpj}</div>`:""}${fac.endereco?`<div class="ad">${fac.endereco}</div>`:""}${destino?`<div class="ad">Etapa: ${destino.nome}</div>`:""}`:`<div class="ln"></div><div class="ln"></div>`}</div></div>`;
+    <div class="dest"><div class="lb">DESTINATÁRIO / FACÇÃO</div>${fac?`<div class="nm">${fac.nome}</div>${fac.cnpj?`<div>CNPJ: ${fac.cnpj}</div>`:""}${fac.endereco?`<div class="ad">${fac.endereco}</div>`:""}${destNome?`<div class="ad">Etapa: ${destNome}</div>`:""}`:`<div class="ln"></div><div class="ln"></div>`}</div></div>`;
   const rows=cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("");
-  const foot=`<tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totLote(l)}</b></td></tr>`;
+  const foot=`<tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totalPecas}</b></td></tr>`;
   const w=window.open("","_blank");
   w.document.write(`<html><head><title>Romaneio #${l.numero}</title><style>body{font-family:Arial;padding:22px;color:#111}h1{font-size:17px;margin:12px 0 4px}
     .hdr{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #222;padding-bottom:8px}
@@ -373,8 +411,8 @@ function printRomaneio(id){const l=S.lotes.find(x=>x.id===id);const c=coresDe(l)
     .ad{font-size:11px;color:#444}.dest .ln{border-bottom:1px solid #999;height:15px;margin-top:12px}
     table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #888;padding:6px 8px;text-align:center}th{background:#eee}td:first-child,th:first-child{text-align:left}
     .sig{margin-top:46px;display:flex;gap:40px}.sig div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:12px;text-align:center}</style></head>
-  <body>${header}<h1>Romaneio de Produção — Lote #${l.numero}</h1>
-  <div>Produto: <b>${l.produto}</b> ${l.ref?"("+l.ref+")":""} &nbsp;·&nbsp; Data: ${new Date().toLocaleDateString("pt-BR")} &nbsp;·&nbsp; Total: <b>${totLote(l)} peças</b></div>
+  <body>${header}<h1>Romaneio de Produção — Lote #${l.numero}${destNome?" · "+destNome:""}</h1>
+  <div>Produto: <b>${l.produto}</b> ${l.ref?"("+l.ref+")":""} &nbsp;·&nbsp; Data: ${new Date().toLocaleDateString("pt-BR")} &nbsp;·&nbsp; Total: <b>${totalPecas} peças</b></div>
   <table><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}<th>Total</th></tr></thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>
   <div class="sig"><div>Facção / Responsável</div><div>Data de entrega</div><div>Assinatura</div></div>
   <scr`+`ipt>window.onload=function(){window.print()}<\/scr`+`ipt></body></html>`);w.document.close();}
@@ -432,7 +470,11 @@ async function usarFaccaoBling(id,nome){
 function delFaccao(id){if(confirm("Excluir facção?")){S.faccoes=S.faccoes.filter(x=>x.id!==id);save();render();}}
 
 // ---------- FINANCEIRO ----------
-function finPorFaccao(){const map={};S.lotes.forEach(l=>l.etapas.forEach(e=>{if(!e.faccaoId)return;const base=(Number(e.qtdEnv)||0)*(Number(e.valor)||0);if(base<=0)return;
+function finPorFaccao(){const map={};S.lotes.forEach(l=>l.etapas.forEach(e=>{
+    if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(!p.faccaoId)return;const q=totPartes(p.grade);const base=q*(Number(p.valor)||0);if(base<=0)return;
+      map[p.faccaoId]=map[p.faccaoId]||{faccaoId:p.faccaoId,total:0,pendente:0,itens:[]};map[p.faccaoId].total+=base;if(!p.pago)map[p.faccaoId].pendente+=base;
+      map[p.faccaoId].itens.push({lote:l.numero,etapa:e.nome+" (dividida)",q,v:p.valor,base,pago:p.pago,ref:{lid:l.id,nome:e.nome}});});return;}
+    if(!e.faccaoId)return;const base=(Number(e.qtdEnv)||0)*(Number(e.valor)||0);if(base<=0)return;
     map[e.faccaoId]=map[e.faccaoId]||{faccaoId:e.faccaoId,total:0,pendente:0,itens:[]};map[e.faccaoId].total+=base;if(!e.pago)map[e.faccaoId].pendente+=base;
     map[e.faccaoId].itens.push({lote:l.numero,etapa:e.nome,q:e.qtdEnv,v:e.valor,base,pago:e.pago,ref:{lid:l.id,nome:e.nome}});}));return Object.values(map);}
 function perdaFaccao(fid){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(e.faccaoId===fid&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
@@ -460,7 +502,7 @@ async function gerarContaPagar(faccaoId){
     }
   }catch(e){alert("Erro ao falar com o Bling. Tente de novo.");}
 }
-function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
+function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;if(e.partes)e.partes.forEach(p=>p.pago=true);l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
 
 function openSheet(h){document.getElementById("sheet").innerHTML=h;document.getElementById("modal").classList.add("on");}
 function closeSheet(){document.getElementById("modal").classList.remove("on");}
