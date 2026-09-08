@@ -147,13 +147,15 @@ export default async function handler(req, res) {
     if (action === 'produto') {
       const ref = (req.query.ref || '').toString().trim();
       if (!ref) return res.status(400).json({ erro: 'ref_vazia' });
+      // percorre todo o catálogo (a busca do Bling por texto não devolve tudo) e filtra pelo prefixo do código
       const cores = {};
-      let nome = '', pagina = 1, continua = true;
-      while (continua && pagina <= 8) {
-        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&pesquisa=' + encodeURIComponent(ref), token);
+      let nome = '', pagina = 1, continua = true, vistos = 0;
+      while (continua && pagina <= 12) {
+        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
         const arr = body.data || [];
         for (const p of arr) {
-          if (p.formato !== 'S' || !p.codigo || !p.codigo.startsWith(ref + '-')) continue;
+          if (!p.codigo || !p.codigo.startsWith(ref + '-')) continue;
+          if (p.formato && p.formato !== 'S') continue; // só variações (tamanho)
           const resto = p.codigo.slice(ref.length + 1);
           const partes = resto.split('-');
           const tam = partes[partes.length - 1];
@@ -162,11 +164,12 @@ export default async function handler(req, res) {
           cores[cor] = cores[cor] || {};
           cores[cor][tam] = 0;
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
+          vistos++;
         }
         continua = arr.length === 100;
         pagina++;
       }
-      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, tamanhos: TAMS });
+      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, tamanhos: TAMS, variacoes: vistos });
     }
     if (action === 'conta-pagar' && req.method === 'POST') {
       const b = req.body || {};
