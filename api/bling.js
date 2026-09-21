@@ -224,6 +224,7 @@ export default async function handler(req, res) {
       };
       const payload = {
         tipo: 1,
+        serie: 2,
         dataEmissao: agora,
         dataOperacao: agora,
         contato: contatoNfe,
