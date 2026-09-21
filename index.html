@@ -105,22 +105,21 @@ async function blingApi(action,params={},opts={}){
 }
 async function emitirRemessa(lid){
   const l=S.lotes.find(x=>x.id===lid); if(!l)return;
-  const cand=l.etapas.filter(e=>{const f=S.faccoes.find(x=>x.id===e.faccaoId);return f&&f.blingId;}).map(e=>({e,f:S.faccoes.find(x=>x.id===e.faccaoId)}));
-  if(!cand.length){alert("Nenhuma etapa com facção vinculada ao Bling.\n\nNa etapa, escolha a facção usando \"Listar facções do Bling\" antes de emitir a remessa.");return;}
-  let chosen=cand[0];
-  if(cand.length>1){
-    const msg="Emitir remessa para qual facção?\n\n"+cand.map((c,i)=>`${i+1}) ${c.f.nome} — ${c.e.nome}`).join("\n")+"\n\nDigite o número:";
-    const n=prompt(msg); if(!n)return; const idx=Number(n)-1; if(!cand[idx]){alert("Opção inválida.");return;} chosen=cand[idx];
-  }
-  const qtd=totLote(l);
-  const vin=prompt("Valor por peça (R$):","16,50"); if(vin===null)return;
+  const sel=document.getElementById("destEt"); const idx=sel?sel.value:"";
+  if(idx===""){alert("Selecione a etapa/facção no seletor ao lado (o mesmo do romaneio: \"→ Estamparia\", \"→ Costura\"…) antes de emitir a NF.");return;}
+  const e=l.etapas[idx]; if(!e){return;}
+  const f=S.faccoes.find(x=>x.id===e.faccaoId);
+  if(!f){alert(`A etapa "${e.nome}" ainda não tem facção escolhida.`);return;}
+  if(!f.blingId){alert(`A facção "${f.nome}" não está vinculada ao Bling.\n\nEdite a facção e use "Listar facções do Bling" pra vincular (traz o CNPJ).`);return;}
+  const qtd=(Number(e.qtdEnv)||0)>0?Number(e.qtdEnv):totLote(l);
+  const vin=prompt("Valor por peça na NF (R$):","16,50"); if(vin===null)return;
   const valor=Number(String(vin).replace(/\./g,'').replace(',','.'))||16.50;
-  if(!confirm(`Criar NF de remessa (RASCUNHO) no Bling?\n\nFacção: ${chosen.f.nome}\nItem: Basica Facção (B-FAC)\nQtd: ${qtd} peças × ${money(valor)}\nNatureza: Remessa para Industrialização\n\n(Depois você revisa e envia pra SEFAZ no Bling.)`))return;
+  if(!confirm(`Criar NF de remessa (RASCUNHO) no Bling?\n\nFacção: ${f.nome}\nEtapa: ${e.nome}\nQtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(Depois você revisa e envia pra SEFAZ no Bling.)`))return;
   toast("Gerando NF-e no Bling…");
   try{
-    const {status,data}=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:chosen.f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero})});
+    const {status,data}=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome})});
     if(status>=200&&status<300&&data&&data.data&&data.data.id){
-      l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`NF remessa (rascunho) criada no Bling — ${chosen.f.nome} (${qtd} pç)`});save();
+      l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`NF remessa (rascunho) criada no Bling — ${f.nome} / ${e.nome} (${qtd} pç)`});save();
       alert("✓ NF-e de remessa criada como RASCUNHO no Bling (nº "+(data.data.numero||data.data.id)+").\n\nAbra o Bling, confira e envie pra SEFAZ. Quando estiver 100%, eu deixo esse botão emitir e imprimir a DANFE direto aqui.");
     } else {
       alert("Não consegui criar a NF-e.\n\n"+JSON.stringify(data&&(data.error||data)).slice(0,400));
@@ -384,6 +383,8 @@ function setEt(lid,i,campo,val){if(campo==="faccaoId"&&val==="__new"){quickFacca
   e[campo]=(["valor","qtdEnv","qtdRet"].includes(campo))?Number(val)||0:val;
   if(campo==="status"&&antes!==val){e.dtRet=val==="Concluído"&&!e.dtRet?hoje():e.dtRet;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome}: ${val}`+(e.faccaoId?` (${fName(e.faccaoId)})`:"")});}
   if(campo==="faccaoId"){const f=S.faccoes.find(x=>x.id===val);if(f&&!e.valor)e.valor=f.valor;}
+  if(campo==="qtdRet"&&antes!==e.qtdRet){const q=e.qtdRet;const prox=l.etapas[i+1];
+    if(q>0&&prox&&confirm(`Aplicar ${q} peças como "Qtd enviada" da próxima etapa (${prox.nome})?`)){prox.qtdEnv=q;if(!prox.dtEnv)prox.dtEnv=hoje();if(prox.status==="Aberto")prox.status="Em produção";l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${prox.nome}: recebeu ${q} pç da ${e.nome}`});}}
   save();refreshLote(lid);toast("Salvo ✓");}
 let _quickBlingId="";
 function quickFaccao(lid,i){_quickBlingId="";openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button><h2>Nova facção</h2>
