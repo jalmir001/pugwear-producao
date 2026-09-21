@@ -135,6 +135,21 @@ export default async function handler(req, res) {
       const lista = (body.data || []).map(c => ({ id: c.id, nome: c.nome, doc: c.numeroDocumento || '' }));
       return res.status(200).json({ faccoes: lista });
     }
+    // ---- Lista TODOS os fornecedores (facções) — não depende da busca por texto ----
+    if (action === 'fornecedores') {
+      const lista = [];
+      let pagina = 1, continua = true;
+      while (continua && pagina <= 6) {
+        const { body } = await bfetch('/contatos?idTipoContato=' + TIPO_FORNECEDOR + '&limite=100&pagina=' + pagina, token);
+        const arr = body.data || [];
+        arr.forEach(c => lista.push({ id: c.id, nome: c.nome, doc: c.numeroDocumento || '' }));
+        continua = arr.length === 100;
+        pagina++;
+      }
+      // ordena por nome
+      lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+      return res.status(200).json({ fornecedores: lista, total: lista.length });
+    }
     if (action === 'faccao') {
       const id = (req.query.id || '').toString();
       const { body } = await bfetch('/contatos/' + id, token);
