@@ -105,35 +105,38 @@ async function blingApi(action,params={},opts={}){
 }
 async function emitirRemessa(lid){
   const l=S.lotes.find(x=>x.id===lid); if(!l)return;
-  let e=null;
-  const sel=document.getElementById("destEt"); const idx=sel?sel.value:"";
-  if(idx!==""&&l.etapas[idx]) e=l.etapas[idx];
-  else{
-    const cand=l.etapas.map((et,i)=>({et,i,f:S.faccoes.find(x=>x.id===et.faccaoId)})).filter(c=>c.f&&c.f.blingId);
-    if(!cand.length){alert("Nenhuma etapa com facção vinculada ao Bling.\n\nNa etapa, escolha a facção usando \"Listar facções do Bling\" (traz o CNPJ) antes de emitir a remessa.");return;}
-    if(cand.length===1){ e=cand[0].et; }
-    else{
-      const msg="Emitir remessa para qual facção?\n\n"+cand.map((c,k)=>`${k+1}) ${c.f.nome} — ${c.et.nome}`).join("\n")+"\n\nDigite o número:";
-      const n=prompt(msg); if(!n)return; const k=Number(n)-1; if(!cand[k]){alert("Opção inválida.");return;} e=cand[k].et;
-    }
+  const cand=l.etapas.map((et,i)=>({et,i,f:S.faccoes.find(x=>x.id===et.faccaoId)})).filter(c=>c.f);
+  if(!cand.length){alert("Nenhuma etapa tem facção escolhida ainda.\n\nEscolha a facção na etapa (\"Listar facções do Bling\") antes de emitir a remessa.");return;}
+  const msg="Emitir NF de remessa para qual facção?\n\n"+cand.map((c,k)=>`${k+1}) ${c.et.nome} — ${c.f.nome} (${(Number(c.et.qtdEnv)||0)>0?c.et.qtdEnv:totLote(l)} pç)${c.f.blingId?'':' ⚠ NÃO vinculada'}`).join("\n")+"\n\nDigite o número da que quer emitir:";
+  const n=prompt(msg); if(!n)return; const k=Number(n)-1; if(!cand[k]){alert("Opção inválida.");return;}
+  const e=cand[k].et; const f=cand[k].f;
+  if(!f.blingId){alert(`A facção "${f.nome}" não está vinculada ao Bling.\n\nEdite a facção e use "Listar facções do Bling" pra vincular (traz o CNPJ) antes de emitir.`);return;}
+  // já tem NF-e emitida pra essa etapa? oferece reimprimir
+  if(e.nfe&&e.nfe.link){
+    if(confirm(`Essa etapa (${e.nome}) já tem a NF-e nº ${e.nfe.numero} emitida.\n\nOK = imprimir a DANFE de novo\nCancelar = emitir uma NOVA nota`)){ window.open(e.nfe.link,"_blank"); return; }
   }
-  const f=S.faccoes.find(x=>x.id===e.faccaoId);
-  if(!f){alert(`A etapa "${e.nome}" ainda não tem facção escolhida.`);return;}
-  if(!f.blingId){alert(`A facção "${f.nome}" não está vinculada ao Bling.\n\nEdite a facção e use "Listar facções do Bling" pra vincular (traz o CNPJ).`);return;}
   const qtd=(Number(e.qtdEnv)||0)>0?Number(e.qtdEnv):totLote(l);
   const vin=prompt("Valor por peça na NF (R$):","16,50"); if(vin===null)return;
   const valor=Number(String(vin).replace(/\./g,'').replace(',','.'))||16.50;
-  if(!confirm(`Criar NF de remessa (RASCUNHO) no Bling?\n\nFacção: ${f.nome}\nEtapa: ${e.nome}\nQtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(Depois você revisa e envia pra SEFAZ no Bling.)`))return;
-  toast("Gerando NF-e no Bling…");
+  if(!confirm(`Emitir e AUTORIZAR a NF de remessa na SEFAZ?\n\nFacção: ${f.nome}\nEtapa: ${e.nome}\nQtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(A nota é enviada pra SEFAZ de verdade e a DANFE abre pra imprimir.)`))return;
+  toast("Emitindo e autorizando na SEFAZ…");
   try{
-    const {status,data}=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome})});
-    if(status>=200&&status<300&&data&&data.data&&data.data.id){
-      l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`NF remessa (rascunho) criada no Bling — ${f.nome} / ${e.nome} (${qtd} pç)`});save();
-      alert("✓ NF-e de remessa criada como RASCUNHO no Bling (nº "+(data.data.numero||data.data.id)+").\n\nAbra o Bling, confira e envie pra SEFAZ. Quando estiver 100%, eu deixo esse botão emitir e imprimir a DANFE direto aqui.");
+    const c=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome})});
+    if(!(c.status>=200&&c.status<300&&c.data&&c.data.data&&c.data.data.id)){alert("Não consegui criar a NF-e.\n\n"+JSON.stringify(c.data&&(c.data.error||c.data)).slice(0,400));return;}
+    const nfeId=c.data.data.id, numero=c.data.data.numero||nfeId;
+    toast("Enviando pra SEFAZ…");
+    const s=await blingApi("nfe-enviar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nfeId})});
+    const link=(s.data&&(s.data.linkDanfe||s.data.linkPDF))||"";
+    if(link){
+      e.nfe={id:nfeId,numero,link,chave:s.data.chaveAcesso||""};
+      l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`NF-e remessa nº ${numero} AUTORIZADA — ${f.nome} / ${e.nome} (${qtd} pç)`});save();
+      window.open(link,"_blank");
+      alert("✓ NF-e nº "+numero+" AUTORIZADA na SEFAZ!\n\nA DANFE abriu em outra aba pra imprimir. (Pra reimprimir depois, é só clicar em Emitir NF de novo nessa etapa.)");
     } else {
-      alert("Não consegui criar a NF-e.\n\n"+JSON.stringify(data&&(data.error||data)).slice(0,400));
+      l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`NF-e remessa nº ${numero} enviada (aguardando SEFAZ) — ${f.nome}`});save();
+      alert("NF-e nº "+numero+" criada e enviada, mas a SEFAZ ainda não retornou a autorização (ou houve rejeição).\n\nSituação: "+(s.data&&s.data.situacao)+"\nConfira no Bling em alguns instantes.");
     }
-  }catch(e){alert("Erro ao falar com o Bling. Tente de novo.");}
+  }catch(err){alert("Erro ao falar com o Bling. Tente de novo.");}
 }
 function setSB(t){const e=document.getElementById("sbst");if(e)e.textContent=t;}
 function cloudPush(){
@@ -353,7 +356,17 @@ function stepHtml(l,e,i){const val=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);co
       <div><label>Previsão (retorno)</label><input type="date" value="${e.dtPrev||''}" onchange="setEt('${l.id}',${i},'dtPrev',this.value)"></div>
     </div>
     <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b>${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}</span>
-      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>${divisaoHtml(l,e,i)}</div>`;}
+      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>${e.nfe?`<div style="margin-top:6px"><button class="btn sec mini" onclick="imprimirDanfe('${l.id}',${i})">🖨️ Imprimir DANFE nº ${e.nfe.numero}</button></div>`:''}${divisaoHtml(l,e,i)}</div>`;}
+async function imprimirDanfe(lid,i){
+  const l=S.lotes.find(x=>x.id===lid); if(!l)return; const e=l.etapas[i]; if(!e||!e.nfe)return;
+  toast("Abrindo DANFE…");
+  try{
+    const {data}=await blingApi("nfe-danfe",{id:e.nfe.id});
+    const link=(data&&(data.linkDanfe||data.linkPDF))||e.nfe.link;
+    if(link){window.open(link,"_blank");}
+    else{alert("Ainda não há DANFE disponível pra essa nota (pode não estar autorizada). Situação: "+(data&&data.situacao));}
+  }catch(err){ if(e.nfe.link){window.open(e.nfe.link,"_blank");} else {alert("Erro ao abrir a DANFE. Tente de novo.");} }
+}
 function totPartes(grade){return Object.values(grade||{}).reduce((s,g)=>s+totGrade(g),0);}
 function divisaoHtml(l,e,i){
   const has=e.partes&&e.partes.length;
