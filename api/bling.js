@@ -244,9 +244,23 @@ export default async function handler(req, res) {
       const id = (req.body && req.body.id) || '';
       if (!id) return res.status(400).json({ erro: 'sem_id' });
       const env = await bfetch('/nfe/' + id + '/enviar', token, { method: 'POST' });
+      // aguarda a autorização da SEFAZ (poll até uns 6s)
+      let d = {};
+      for (let i = 0; i < 4; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const det = await bfetch('/nfe/' + id, token);
+        d = (det.body && det.body.data) || {};
+        if (d.linkDanfe || d.linkPDF || [5, 6, 7].includes(d.situacao)) break;
+      }
+      return res.status(env.status).json({ enviar: env.body, situacao: d.situacao, linkDanfe: d.linkDanfe, linkPDF: d.linkPDF, chaveAcesso: d.chaveAcesso });
+    }
+    // ---- Buscar o link da DANFE de uma NF-e já emitida (pra reimprimir depois) ----
+    if (action === 'nfe-danfe') {
+      const id = (req.query.id || (req.body && req.body.id) || '').toString();
+      if (!id) return res.status(400).json({ erro: 'sem_id' });
       const det = await bfetch('/nfe/' + id, token);
       const d = (det.body && det.body.data) || {};
-      return res.status(env.status).json({ enviar: env.body, situacao: d.situacao, linkDanfe: d.linkDanfe, linkPDF: d.linkPDF, chaveAcesso: d.chaveAcesso });
+      return res.status(200).json({ linkDanfe: d.linkDanfe, linkPDF: d.linkPDF, numero: d.numero, situacao: d.situacao, chaveAcesso: d.chaveAcesso });
     }
     if (action === 'nfse') {
       return res.status(501).json({ erro: 'nfse_pendente', detalhe: 'NFS-e depende de config fiscal no Bling (certificado, prefeitura, ISS). Validar com contador.' });
