@@ -7,6 +7,7 @@ const BLING_API = 'https://api.bling.com.br/Api/v3';
 const BLING_WWW = 'https://www.bling.com.br/Api/v3';
 const TIPO_FORNECEDOR = 2759122975;
 const PORTADOR_CAIXA = 2759123137;
+const NAT_REMESSA_IND = 15111528516; // natureza "Remessa para Industrialização"
 const TAMS = ['P', 'M', 'G', 'GG', 'G1', 'G2'];
 
 const SB_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
@@ -197,6 +198,36 @@ export default async function handler(req, res) {
       if (b.idContato) payload.contato = { id: Number(b.idContato) };
       const { status, body } = await bfetch('/contas/pagar', token, { method: 'POST', body: JSON.stringify(payload) });
       return res.status(status).json(body);
+    }
+    // ---- Emitir NF-e de remessa para industrialização (cria rascunho no Bling) ----
+    if (action === 'nfe-remessa' && req.method === 'POST') {
+      const b = req.body || {};
+      if (!b.idContato) return res.status(400).json({ erro: 'sem_faccao' });
+      const qtd = Number(b.quantidade) || 0;
+      const valor = Number(b.valor) || 16.50;
+      if (qtd <= 0) return res.status(400).json({ erro: 'qtd_invalida' });
+      const payload = {
+        tipo: 1,
+        contato: { id: Number(b.idContato) },
+        naturezaOperacao: { id: NAT_REMESSA_IND },
+        itens: [{
+          codigo: 'B-FAC', descricao: 'Basica Faccao', unidade: 'Un',
+          quantidade: qtd, valor: valor, tipo: 'P',
+          classificacaoFiscal: '61099000', cfop: '5901', origem: 0
+        }]
+      };
+      if (b.obs) payload.observacoes = b.obs;
+      const { status, body } = await bfetch('/nfe', token, { method: 'POST', body: JSON.stringify(payload) });
+      return res.status(status).json(body);
+    }
+    // ---- Enviar NF-e pra SEFAZ (autorizar) + devolver links da DANFE ----
+    if (action === 'nfe-enviar' && req.method === 'POST') {
+      const id = (req.body && req.body.id) || '';
+      if (!id) return res.status(400).json({ erro: 'sem_id' });
+      const env = await bfetch('/nfe/' + id + '/enviar', token, { method: 'POST' });
+      const det = await bfetch('/nfe/' + id, token);
+      const d = (det.body && det.body.data) || {};
+      return res.status(env.status).json({ enviar: env.body, situacao: d.situacao, linkDanfe: d.linkDanfe, linkPDF: d.linkPDF, chaveAcesso: d.chaveAcesso });
     }
     if (action === 'nfse') {
       return res.status(501).json({ erro: 'nfse_pendente', detalhe: 'NFS-e depende de config fiscal no Bling (certificado, prefeitura, ISS). Validar com contador.' });
