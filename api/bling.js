@@ -206,8 +206,11 @@ export default async function handler(req, res) {
       const qtd = Number(b.quantidade) || 0;
       const valor = Number(b.valor) || 16.50;
       if (qtd <= 0) return res.status(400).json({ erro: 'qtd_invalida' });
+      const agora = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const payload = {
         tipo: 1,
+        dataEmissao: agora,
+        dataOperacao: agora,
         contato: { id: Number(b.idContato) },
         naturezaOperacao: { id: NAT_REMESSA_IND },
         itens: [{
