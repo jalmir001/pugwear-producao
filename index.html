@@ -361,12 +361,18 @@ function setEt(lid,i,campo,val){if(campo==="faccaoId"&&val==="__new"){quickFacca
   if(campo==="status"&&antes!==val){e.dtRet=val==="Concluído"&&!e.dtRet?hoje():e.dtRet;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome}: ${val}`+(e.faccaoId?` (${fName(e.faccaoId)})`:"")});}
   if(campo==="faccaoId"){const f=S.faccoes.find(x=>x.id===val);if(f&&!e.valor)e.valor=f.valor;}
   save();refreshLote(lid);toast("Salvo ✓");}
-function quickFaccao(lid,i){openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button><h2>Nova facção</h2><label>Nome</label><input id="qfn" placeholder="Nome da facção">
+let _quickBlingId="";
+function quickFaccao(lid,i){_quickBlingId="";openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button><h2>Nova facção</h2>
+  <div class="card" style="background:var(--card2);margin-bottom:10px"><label>Puxar do Bling (lista as suas facções)</label>
+    <div class="row"><button class="btn sec mini" type="button" onclick="listarFaccoesBling('q')">📋 Listar facções do Bling</button></div>
+    <div class="row" style="margin-top:6px"><input id="qfbusca" placeholder="ou busque por nome" style="flex:1"><button class="btn sec mini" type="button" onclick="buscarFaccaoBling('q')">🔎</button></div>
+    <div id="qfresult" class="muted" style="margin-top:6px;max-height:180px;overflow:auto"></div></div>
+  <label>Nome</label><input id="qfn" placeholder="Nome da facção">
   <div class="grid2" style="margin-top:10px"><div><label>Serviço</label><select id="qfs">${["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento","Outro"].map(s=>`<option>${s}</option>`).join("")}</select></div><div><label>Valor / peça</label><input id="qfv" type="number" step="0.01" value="0"></div></div>
   <div class="grid2" style="margin-top:10px"><div><label>CNPJ (opcional)</label><input id="qfc"></div><div><label>Endereço (opcional)</label><input id="qfe"></div></div>
   <button class="btn" style="width:100%;margin-top:12px" onclick="salvarQuickFaccao('${lid}',${i})">Salvar e usar</button>`);}
 function salvarQuickFaccao(lid,i){const nome=document.getElementById("qfn").value.trim();if(!nome){alert("Digite o nome da facção.");return;}
-  const nf={id:uid(),nome,servico:document.getElementById("qfs").value,valor:Number(document.getElementById("qfv").value)||0,cnpj:document.getElementById("qfc").value||"",endereco:document.getElementById("qfe").value||""};
+  const nf={id:uid(),nome,servico:document.getElementById("qfs").value,valor:Number(document.getElementById("qfv").value)||0,cnpj:document.getElementById("qfc").value||"",endereco:document.getElementById("qfe").value||"",blingId:_quickBlingId||""};
   S.faccoes.push(nf);const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];e.faccaoId=nf.id;if(!e.valor)e.valor=nf.valor;
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Facção "${nome}" vinculada em ${e.nome}`});save();abrirLote(lid);toast("Facção criada e vinculada ✓");}
 function setLoteNum(id,c,v){S.lotes.find(x=>x.id===id)[c]=Number(v)||0;save();refreshLote(id);toast("Salvo ✓");}
@@ -434,9 +440,10 @@ function vFaccoes(){document.getElementById("app").innerHTML=`<div class="hint">
 function editFaccao(id){const f=id?S.faccoes.find(x=>x.id===id):{nome:"",servico:"Costura",valor:0,cnpj:"",endereco:""};
   _faccaoBlingId=f.blingId||"";
   openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>${id?"Editar":"Nova"} facção</h2>
-  <div class="card" style="background:var(--card2);margin-bottom:10px"><label>Buscar no Bling (traz CNPJ e endereço)</label>
-    <div class="row"><input id="fbusca" placeholder="Nome no Bling (ex.: Fn)" style="flex:1"><button class="btn sec mini" type="button" onclick="buscarFaccaoBling()">🔎 Buscar</button></div>
-    <div id="fresult" class="muted" style="margin-top:6px"></div></div>
+  <div class="card" style="background:var(--card2);margin-bottom:10px"><label>Puxar do Bling (traz CNPJ e endereço)</label>
+    <div class="row"><button class="btn sec mini" type="button" onclick="listarFaccoesBling('')">📋 Listar facções do Bling</button></div>
+    <div class="row" style="margin-top:6px"><input id="fbusca" placeholder="ou busque por nome" style="flex:1"><button class="btn sec mini" type="button" onclick="buscarFaccaoBling('')">🔎</button></div>
+    <div id="fresult" class="muted" style="margin-top:6px;max-height:200px;overflow:auto"></div></div>
   <label>Nome</label><input id="fn" value="${f.nome}">
   <div class="grid2" style="margin-top:10px"><div><label>Serviço</label><select id="fs">${["Corte","Estamparia","Costura","Bordado","Revisão/Embalagem","Aplicar termocolante","Pregar bolso","Caseado","Catracar cós","Acabamento","Outro"].map(s=>`<option ${s===f.servico?"selected":""}>${s}</option>`).join("")}</select></div><div><label>Valor / peça</label><input id="fv" type="number" step="0.01" value="${f.valor}"></div></div>
   <div class="grid2" style="margin-top:10px"><div><label>CNPJ (opcional)</label><input id="fcnpj" value="${f.cnpj||''}"></div><div><label>Endereço (opcional)</label><input id="fend" value="${f.endereco||''}"></div></div>
@@ -444,27 +451,38 @@ function editFaccao(id){const f=id?S.faccoes.find(x=>x.id===id):{nome:"",servico
 let _faccaoBlingId="";
 function salvarFaccao(id){const dados={nome:document.getElementById("fn").value||"Facção",servico:document.getElementById("fs").value,valor:Number(document.getElementById("fv").value)||0,cnpj:document.getElementById("fcnpj").value||"",endereco:document.getElementById("fend").value||"",blingId:_faccaoBlingId||""};
   if(id){Object.assign(S.faccoes.find(x=>x.id===id),dados);}else{S.faccoes.push({id:uid(),...dados});}save();closeSheet();render();toast("Salvo ✓");}
-async function buscarFaccaoBling(){
-  const q=(document.getElementById("fbusca").value||"").trim();
-  const box=document.getElementById("fresult");
-  if(!q){box.textContent="Digite um nome pra buscar.";return;}
+function _fFields(ctx){return ctx==='q'?{busca:'qfbusca',result:'qfresult',nome:'qfn',cnpj:'qfc',end:'qfe'}:{busca:'fbusca',result:'fresult',nome:'fn',cnpj:'fcnpj',end:'fend'};}
+function _setBlingId(ctx,v){if(ctx==='q')_quickBlingId=v;else _faccaoBlingId=v;}
+function _resultHtml(lista,ctx){return lista.map(c=>`<div class="row" style="justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)"><span>${c.nome}${c.doc?` <span class="muted">(${c.doc})</span>`:""}</span><button class="btn sec mini" type="button" onclick="usarFaccaoBling('${ctx}',${c.id},'${(c.nome||'').replace(/'/g,'')}')">usar</button></div>`).join("");}
+async function listarFaccoesBling(ctx){
+  const f=_fFields(ctx);const box=document.getElementById(f.result);box.textContent="Carregando facções do Bling…";
+  try{
+    const {status,data}=await blingApi("fornecedores",{});
+    const lista=(data.fornecedores||[]);
+    if(status!==200||!lista.length){box.textContent="Não consegui listar (status "+status+").";return;}
+    box.innerHTML=`<div class="muted" style="margin-bottom:4px">${lista.length} fornecedores — clique em "usar":</div>`+_resultHtml(lista,ctx);
+  }catch(e){box.textContent="Erro ao listar. Tente de novo.";}
+}
+async function buscarFaccaoBling(ctx){
+  const f=_fFields(ctx);const q=(document.getElementById(f.busca).value||"").trim();const box=document.getElementById(f.result);
+  if(!q){box.textContent="Digite um nome (ou use Listar facções).";return;}
   box.textContent="Buscando…";
   try{
     const {status,data}=await blingApi("faccoes",{q});
     const lista=(data.faccoes||[]);
-    if(status!==200||!lista.length){box.textContent="Nada encontrado pra \""+q+"\".";return;}
-    box.innerHTML=lista.slice(0,8).map(c=>`<div class="row" style="justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)"><span>${c.nome}${c.doc?` <span class="muted">(${c.doc})</span>`:""}</span><button class="btn sec mini" type="button" onclick="usarFaccaoBling(${c.id},'${(c.nome||'').replace(/'/g,'')}')">usar</button></div>`).join("");
+    if(status!==200||!lista.length){box.textContent="Nada encontrado pra \""+q+"\". Tente o começo do nome, ou Listar facções.";return;}
+    box.innerHTML=_resultHtml(lista.slice(0,12),ctx);
   }catch(e){box.textContent="Erro na busca. Tente de novo.";}
 }
-async function usarFaccaoBling(id,nome){
-  _faccaoBlingId=String(id);
-  document.getElementById("fn").value=nome;
-  const box=document.getElementById("fresult");box.textContent="Puxando CNPJ/endereço…";
+async function usarFaccaoBling(ctx,id,nome){
+  const f=_fFields(ctx);_setBlingId(ctx,String(id));
+  document.getElementById(f.nome).value=nome;
+  const box=document.getElementById(f.result);box.textContent="Puxando CNPJ/endereço…";
   try{
     const {data}=await blingApi("faccao",{id});
-    if(data.cnpj)document.getElementById("fcnpj").value=data.cnpj;
-    if(data.endereco)document.getElementById("fend").value=data.endereco;
-    box.innerHTML=`✓ Vinculado ao Bling${data.fornecedor?" (fornecedor)":""}. Confira e salve.`;
+    if(data.cnpj)document.getElementById(f.cnpj).value=data.cnpj;
+    if(data.endereco)document.getElementById(f.end).value=data.endereco;
+    box.innerHTML=`✓ "${nome}" vinculado ao Bling${data.fornecedor?" (fornecedor)":""}. Ajuste o valor/serviço e salve.`;
   }catch(e){box.textContent="Vinculado, mas não consegui puxar CNPJ/endereço.";}
 }
 function delFaccao(id){if(confirm("Excluir facção?")){S.faccoes=S.faccoes.filter(x=>x.id!==id);save();render();}}
