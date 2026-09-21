@@ -207,11 +207,26 @@ export default async function handler(req, res) {
       const valor = Number(b.valor) || 16.50;
       if (qtd <= 0) return res.status(400).json({ erro: 'qtd_invalida' });
       const agora = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      // busca dados completos do contato (senão o destinatário sai sem nome/endereço)
+      const cd = ((await bfetch('/contatos/' + Number(b.idContato), token)).body || {}).data || {};
+      const eg = (cd.endereco && cd.endereco.geral) ? cd.endereco.geral : (cd.endereco || {});
+      const contatoNfe = {
+        id: cd.id || Number(b.idContato),
+        nome: cd.nome || '',
+        numeroDocumento: cd.numeroDocumento || '',
+        ie: cd.ie || '',
+        telefone: cd.telefone || cd.celular || '',
+        email: cd.email || '',
+        endereco: {
+          endereco: eg.endereco || '', numero: eg.numero || '', complemento: eg.complemento || '',
+          bairro: eg.bairro || '', cep: String(eg.cep || '').replace(/\D/g, ''), municipio: eg.municipio || '', uf: eg.uf || ''
+        }
+      };
       const payload = {
         tipo: 1,
         dataEmissao: agora,
         dataOperacao: agora,
-        contato: { id: Number(b.idContato) },
+        contato: contatoNfe,
         naturezaOperacao: { id: NAT_REMESSA_IND },
         itens: [{
           codigo: 'B-FAC', descricao: 'Basica Faccao', unidade: 'Un',
