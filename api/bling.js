@@ -158,7 +158,7 @@ export default async function handler(req, res) {
       const e = (c.endereco && c.endereco.geral) ? c.endereco.geral : (c.endereco || {});
       const endereco = [e.endereco, e.numero, e.bairro, e.municipio && (e.municipio + '/' + (e.uf || '')), e.cep].filter(Boolean).join(', ');
       const fornecedor = (c.tiposContato || []).some(t => t.id === TIPO_FORNECEDOR);
-      return res.status(200).json({ id: c.id, nome: c.nome, cnpj: c.numeroDocumento || '', endereco, fornecedor });
+      return res.status(200).json({ id: c.id, nome: c.nome, cnpj: c.numeroDocumento || '', endereco, fornecedor, ie: c.ie || '', indicadorIe: c.indicadorIe });
     }
     if (action === 'produto') {
       const ref = (req.query.ref || '').toString().trim();
@@ -210,11 +210,15 @@ export default async function handler(req, res) {
       // busca dados completos do contato (senão o destinatário sai sem nome/endereço)
       const cd = ((await bfetch('/contatos/' + Number(b.idContato), token)).body || {}).data || {};
       const eg = (cd.endereco && cd.endereco.geral) ? cd.endereco.geral : (cd.endereco || {});
+      const temIe = !!(cd.ie && String(cd.ie).replace(/\D/g, ''));
+      const indIe = cd.indicadorIe || (temIe ? 1 : 9); // 1=contribuinte, 9=não contribuinte
+      const naoContrib = indIe === 9 || !temIe;
       const contatoNfe = {
         id: cd.id || Number(b.idContato),
         nome: cd.nome || '',
         numeroDocumento: cd.numeroDocumento || '',
         ie: cd.ie || '',
+        indicadorIe: indIe,
         telefone: cd.telefone || cd.celular || '',
         email: cd.email || '',
         endereco: {
@@ -227,6 +231,9 @@ export default async function handler(req, res) {
         serie: 2,
         dataEmissao: agora,
         dataOperacao: agora,
+        finalidade: 1,
+        consumidorFinal: naoContrib ? 1 : 0,
+        indicadorPresenca: naoContrib ? 9 : 0,
         contato: contatoNfe,
         naturezaOperacao: { id: NAT_REMESSA_IND },
         itens: [{
