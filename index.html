@@ -111,6 +111,16 @@ async function emitirRemessa(lid){
   const n=prompt(msg); if(!n)return; const k=Number(n)-1; if(!cand[k]){alert("Opção inválida.");return;}
   const e=cand[k].et; const f=cand[k].f;
   if(!f.blingId){alert(`A facção "${f.nome}" não está vinculada ao Bling.\n\nEdite a facção e use "Listar facções do Bling" pra vincular (traz o CNPJ) antes de emitir.`);return;}
+  // na dúvida (facção sem IE), pergunta antes se é contribuinte
+  try{
+    const info=await blingApi("faccao",{id:f.blingId});
+    const ie=info.data&&info.data.ie;
+    if(!ie){
+      const ehContrib=confirm(`A facção "${f.nome}" está SEM Inscrição Estadual (IE) no Bling.\n\nEla É contribuinte de ICMS (tem IE)?\n\nOK = SIM, é contribuinte\nCancelar = NÃO é contribuinte`);
+      if(ehContrib){alert(`Então cadastre a IE dela antes de emitir:\nedite a facção "${f.nome}" (no Bling ou no cadastro) e coloque a Inscrição Estadual.\n\nSem a IE não dá pra emitir como contribuinte (a SEFAZ rejeita).`);return;}
+      // se não é contribuinte, segue — o backend emite como consumidor final
+    }
+  }catch(err){}
   // já tem NF-e emitida pra essa etapa? oferece reimprimir
   if(e.nfe&&e.nfe.link){
     if(confirm(`Essa etapa (${e.nome}) já tem a NF-e nº ${e.nfe.numero} emitida.\n\nOK = imprimir a DANFE de novo\nCancelar = emitir uma NOVA nota`)){ window.open(e.nfe.link,"_blank"); return; }
