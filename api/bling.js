@@ -189,12 +189,16 @@ export default async function handler(req, res) {
     }
     if (action === 'conta-pagar' && req.method === 'POST') {
       const b = req.body || {};
+      const hoje = new Date().toISOString().slice(0, 10);
       const payload = {
         vencimento: b.vencimento,
         valor: Number(b.valor),
+        dataEmissao: b.dataEmissao || hoje,
+        competencia: b.competencia || b.dataEmissao || hoje,
         historico: b.historico || 'Fechamento produção (facção)',
         portador: { id: PORTADOR_CAIXA }
       };
+      if (b.numeroDocumento) payload.numeroDocumento = String(b.numeroDocumento);
       if (b.idContato) payload.contato = { id: Number(b.idContato) };
       const { status, body } = await bfetch('/contas/pagar', token, { method: 'POST', body: JSON.stringify(payload) });
       return res.status(status).json(body);
