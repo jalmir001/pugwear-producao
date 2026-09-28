@@ -619,9 +619,11 @@ async function usarFaccaoBling(ctx,id,nome){
 function delFaccao(id){if(confirm("Excluir facção?")){S.faccoes=S.faccoes.filter(x=>x.id!==id);save();render();}}
 
 // ---------- FINANCEIRO ----------
+function _finKey(fid){const f=S.faccoes.find(x=>x.id===fid)||{};return 'n:'+(((f.nome||fid)+'').trim().toLowerCase());}
 function finPorFaccao(){const map={};
-  function add(fid,it){if(!map[fid])map[fid]={faccaoId:fid,total:0,aReceber:0,entregue:0,producao:0,fechavel:0,itens:[]};const m=map[fid];
-    m.total+=it.base;
+  function add(fid,it){const k=_finKey(fid);if(!map[k]){const f=S.faccoes.find(x=>x.id===fid)||{};map[k]={key:k,nome:f.nome||fName(fid),blingId:f.blingId||"",faccaoIds:[],total:0,aReceber:0,entregue:0,producao:0,fechavel:0,itens:[]};}
+    const m=map[k];if(!m.faccaoIds.includes(fid))m.faccaoIds.push(fid);if(!m.blingId){const f=S.faccoes.find(x=>x.id===fid);if(f&&f.blingId)m.blingId=f.blingId;}
+    it.faccaoId=fid;m.total+=it.base;
     if(!it.pago){m.aReceber+=it.base;if(it.concluido){m.entregue+=it.base;m.fechavel+=it.base;}else m.producao+=it.base;}
     m.itens.push(it);}
   S.lotes.forEach(l=>{const enc=!!l.encerrado;l.etapas.forEach(e=>{
@@ -630,37 +632,37 @@ function finPorFaccao(){const map={};
     if(!e.faccaoId)return;const q=qEtapa(e);const base=q*(Number(e.valor)||0);if(base<=0)return;
     add(e.faccaoId,{lote:l.numero,etapa:e.nome,q,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),encerrado:enc,ref:{lid:l.id,nome:e.nome}});
   });});const arr=Object.values(map);arr.forEach(m=>m.pendente=m.aReceber);return arr;}
-function perdaFaccao(fid){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(e.faccaoId===fid&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
+function perdaGrupo(faccaoIds){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(faccaoIds.includes(e.faccaoId)&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
 function vFin(){const dados=finPorFaccao().sort((a,b)=>b.aReceber-a.aReceber);
   const totalReceber=dados.reduce((s,f)=>s+f.aReceber,0);
   const totalFech=dados.reduce((s,f)=>s+f.fechavel,0);
   const totalProd=dados.reduce((s,f)=>s+f.producao,0);
-  const totalEntr=dados.reduce((s,f)=>s+f.entregue,0);
   document.getElementById("app").innerHTML=`
   <div class="card"><div class="between"><h2 style="margin:0">Pronto pra pagar</h2><b class="tot" style="color:var(--acc)">${money(totalFech)}</b></div>
     <div class="muted">Soma de todas as <b>etapas já concluídas</b> (entregues) e ainda não pagas — pode pagar por etapa, não precisa o lote inteiro terminar.</div>
     <div class="muted" style="margin-top:6px">Em produção (ainda com as facções): <b>${money(totalProd)}</b> · A receber no total: <b>${money(totalReceber)}</b></div></div>
-  ${dados.map(f=>`<div class="card"><div class="between"><b>${fName(f.faccaoId)}</b><span>A receber: <b style="color:var(--acc)">${money(f.aReceber)}</b></span></div>
+  ${dados.map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>A receber: <b style="color:var(--acc)">${money(f.aReceber)}</b></span></div>
     <div class="muted" style="margin:4px 0">Pronto pra pagar (concluído): <b style="color:var(--acc)">${money(f.entregue)}</b> · Em produção: <b>${money(f.producao)}</b></div>
     <table><tr><th>Lote</th><th>Etapa</th><th class="right">Qtd</th><th class="right">Valor</th><th class="right">Total</th><th>Situação</th><th></th></tr>
-    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td class="right">${it.q}</td><td class="right">${money(it.v)}</td><td class="right">${money(it.base)}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?'<span class="pill" style="background:var(--acc);color:#022">concluído</span>':'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${f.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${f.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
-    ${(()=>{const p=perdaFaccao(f.faccaoId);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
-    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.faccaoId}')"${f.entregue<=0?' disabled title="Sem etapa concluída"':''}>🧾 Gerar conta a pagar (concluídas)</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
-async function gerarContaPagar(faccaoId){
-  const f=S.faccoes.find(x=>x.id===faccaoId); if(!f){return;}
-  const fin=finPorFaccao().find(x=>x.faccaoId===faccaoId); if(!fin||fin.entregue<=0){alert("Não há etapa CONCLUÍDA pendente para esta facção.\n\nMarque a etapa (ou a parte da facção) como concluída pra ela entrar no pagamento.");return;}
-  if(!f.blingId){alert("Esta facção não está vinculada ao Bling. Edite a facção e use \"Buscar no Bling\" pra vincular antes de gerar a conta.");return;}
+    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td class="right">${it.q}</td><td class="right">${money(it.v)}</td><td class="right">${money(it.base)}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?'<span class="pill" style="background:var(--acc);color:#022">concluído</span>':'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
+    ${(()=>{const p=perdaGrupo(f.faccaoIds);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
+    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.key}')"${f.entregue<=0?' disabled title="Sem etapa concluída"':''}>🧾 Gerar conta a pagar (concluídas)</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+async function gerarContaPagar(key){
+  const fin=finPorFaccao().find(x=>x.key===key); if(!fin){return;}
+  if(fin.entregue<=0){alert("Não há etapa CONCLUÍDA pendente para esta facção.\n\nMarque a etapa (ou a parte da facção) como concluída pra ela entrar no pagamento.");return;}
+  if(!fin.blingId){alert("Esta facção não está vinculada ao Bling. Edite a facção e use \"Buscar no Bling\" pra vincular antes de gerar a conta.");return;}
+  const ids=fin.faccaoIds;
   const venc=prompt("Vencimento da conta (AAAA-MM-DD):",hoje()); if(!venc)return;
-  if(!confirm(`Gerar conta a pagar no Bling (etapas concluídas)?\n\nFacção: ${f.nome}\nValor: ${money(fin.entregue)}\nVencimento: ${venc}`))return;
+  if(!confirm(`Gerar conta a pagar no Bling (etapas concluídas)?\n\nFacção: ${fin.nome}\nValor: ${money(fin.entregue)}\nVencimento: ${venc}`))return;
   toast("Gerando no Bling…");
   try{
-    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,valor:fin.entregue,vencimento:venc,historico:"Produção (etapas concluídas) — "+f.nome})});
+    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:fin.blingId,valor:fin.entregue,vencimento:venc,historico:"Produção (etapas concluídas) — "+fin.nome})});
     if(status>=200&&status<300&&data&&data.data&&data.data.id){
-      // dá baixa só nas etapas/partes CONCLUÍDAS e não pagas dessa facção
+      // dá baixa só nas etapas/partes CONCLUÍDAS e não pagas dessa facção (todos os cadastros do mesmo cliente)
       S.lotes.forEach(l=>{let mexeu=false;l.etapas.forEach(e=>{
-        if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId===faccaoId&&!p.pago&&(p.status==="Concluído"||e.status==="Concluído")){p.pago=true;mexeu=true;}});}
-        else if(e.faccaoId===faccaoId&&!e.pago&&e.status==="Concluído"){e.pago=true;mexeu=true;}});
-        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Conta a pagar gerada (Bling nº ${data.data.id}) — ${f.nome}`});});
+        if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(ids.includes(p.faccaoId)&&!p.pago&&(p.status==="Concluído"||e.status==="Concluído")){p.pago=true;mexeu=true;}});}
+        else if(ids.includes(e.faccaoId)&&!e.pago&&e.status==="Concluído"){e.pago=true;mexeu=true;}});
+        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Conta a pagar gerada (Bling nº ${data.data.id}) — ${fin.nome}`});});
       save();render();
       alert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")\nAs etapas concluídas dessa facção foram baixadas.");
     } else {
