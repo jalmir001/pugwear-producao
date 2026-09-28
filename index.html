@@ -359,8 +359,8 @@ function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">�
 function abrirLote(id){openSheet(loteSheetHtml(S.lotes.find(x=>x.id===id)));}
 function refreshLote(id){const s=document.getElementById("sheet");const y=s.scrollTop;s.innerHTML=loteSheetHtml(S.lotes.find(x=>x.id===id));s.scrollTop=y;}
 function custoLote(l){let mo=0;l.etapas.forEach(e=>{
-    if(e.partes&&e.partes.length){e.partes.forEach(p=>{mo+=totPartes(parteGrade(l,p))*(Number(p.valor)||0);});}
-    else{mo+=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);}});
+    if(e.partes&&e.partes.length){e.partes.forEach(p=>{mo+=qParte(l,p)*(Number(p.valor)||0);});}
+    else{mo+=(Number(e.valor)||0)*qEtapa(e);}});
   const tot=totLote(l);const mp=(Number(l.custoMP)||0)*tot;const total=mo+mp;return{mo,mp,total,porPeca:tot?total/tot:0};}
 function custoCard(l){const c=custoLote(l);return `<div class="card" style="background:var(--card2);margin-top:12px"><div class="between"><h2 style="margin:0;font-size:13px">Custo</h2><span>Por peça: <b style="color:var(--acc)">${money(c.porPeca)}</b></span></div>
   <div class="grid2" style="margin-top:6px"><div><label>Matéria-prima / peça</label><input type="number" step="0.01" value="${l.custoMP||0}" onchange="setLoteNum('${l.id}','custoMP',this.value)"></div><div><label>Composição</label><div class="muted">Mão de obra: ${money(c.mo)}<br>Matéria-prima: ${money(c.mp)}<br><b>Total: ${money(c.total)}</b></div></div></div></div>`;}
@@ -368,11 +368,11 @@ function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.
   const danfe=e.nfe?`<div style="margin-top:6px"><button class="btn sec mini" onclick="imprimirDanfe('${l.id}',${i})">🖨️ Imprimir DANFE nº ${e.nfe.numero}</button></div>`:'';
   if(dividida){
     const totProc=e.partes.reduce((s,p)=>s+totPartes(parteGrade(l,p)),0);
-    const custoProc=e.partes.reduce((s,p)=>s+totPartes(parteGrade(l,p))*(Number(p.valor)||0),0);
+    const custoProc=e.partes.reduce((s,p)=>s+qParte(l,p)*(Number(p.valor)||0),0);
     return `<div class="step"><div class="between"><b>${e.nome}</b><span>${pill(st)} <button class="btn mini sec" title="Subir" onclick="moveEtapa('${l.id}',${i},-1)"${i===0?' disabled':''}>↑</button> <button class="btn mini sec" title="Descer" onclick="moveEtapa('${l.id}',${i},1)"${i===l.etapas.length-1?' disabled':''}>↓</button> <button class="btn mini red" style="margin-left:6px" onclick="rmEtapa('${l.id}',${i})">×</button></span></div>
     <div class="between" style="margin-top:4px"><span class="muted">Processo · <b>${totProc} pç</b> no total · ${e.partes.length} facções fazendo</span><span class="muted">Custo: <b style="color:var(--acc)">${money(custoProc)}</b></span></div>${danfe}${divisaoHtml(l,e,i)}</div>`;
   }
-  const val=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);
+  const val=(Number(e.valor)||0)*qEtapa(e);
   return `<div class="step"><div class="between"><b>${e.nome}</b><span>${pill(st)} <button class="btn mini sec" title="Subir" onclick="moveEtapa('${l.id}',${i},-1)"${i===0?' disabled':''}>↑</button> <button class="btn mini sec" title="Descer" onclick="moveEtapa('${l.id}',${i},1)"${i===l.etapas.length-1?' disabled':''}>↓</button> <button class="btn mini red" style="margin-left:6px" onclick="rmEtapa('${l.id}',${i})">×</button></span></div>
     <div class="grid2">
       <div><label>Facção</label><select onchange="setEt('${l.id}',${i},'faccaoId',this.value)"><option value="">—</option>${S.faccoes.map(f=>`<option value="${f.id}" ${f.id===e.faccaoId?"selected":""}>${f.nome}</option>`).join("")}<option value="__new">＋ Nova facção…</option></select></div>
@@ -382,7 +382,7 @@ function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.
       <div><label>Data envio</label><input type="date" value="${e.dtEnv}" onchange="setEt('${l.id}',${i},'dtEnv',this.value)"></div>
       <div><label>Previsão (retorno)</label><input type="date" value="${e.dtPrev||''}" onchange="setEt('${l.id}',${i},'dtPrev',this.value)"></div>
     </div>
-    <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b>${(Number(e.qtdRet)>0&&Number(e.qtdEnv)>Number(e.qtdRet))?` · <b style="color:var(--warn)">perda ${Number(e.qtdEnv)-Number(e.qtdRet)} pç</b>`:''}${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}${e.pago?' · <span class="pill p-ok">pago</span>':''}</span>
+    <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b> <span style="font-size:11px">(${qEtapa(e)} pç${Number(e.qtdRet)>0?' retorn.':' env.'})</span>${(Number(e.qtdRet)>0&&Number(e.qtdEnv)>Number(e.qtdRet))?` · <b style="color:var(--warn)">perda ${Number(e.qtdEnv)-Number(e.qtdRet)} pç</b>`:''}${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}${e.pago?' · <span class="pill p-ok">pago</span>':''}</span>
       <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>
     <div class="row" style="margin-top:6px">${(e.faccaoId&&!e.pago&&val>0)?`<button class="btn sec mini" onclick="pagarEtapa('${l.id}',${i})">💰 Baixar pagamento da facção</button>`:''}</div>${danfe}${divisaoHtml(l,e,i)}</div>`;}
 function pagarEtapa(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];e.pago=true;if(e.partes)e.partes.forEach(p=>p.pago=true);l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${e.nome}${e.faccaoId?" ("+fName(e.faccaoId)+")":""}`});save();refreshLote(lid);toast("Baixado ✓");}
@@ -399,12 +399,15 @@ async function imprimirDanfe(lid,i){
 }
 function totPartes(grade){return Object.values(grade||{}).reduce((s,g)=>s+totGrade(g),0);}
 function parteGrade(l,p){const c0=coresDe(l);const cs=(p.cores&&p.cores.length)?p.cores:Object.keys(p.grade||{});const g={};cs.forEach(c=>{if(c0[c])g[c]=c0[c];});return g;}
+// quantidade que vale pra PAGAR: usa a retornada quando já preenchida (>0), senão a enviada
+function qEtapa(e){return (Number(e.qtdRet)>0)?Number(e.qtdRet):(Number(e.qtdEnv)||0);}
+function qParte(l,p){const env=totPartes(parteGrade(l,p));return (Number(p.qtdRet)>0)?Number(p.qtdRet):env;}
 function divisaoHtml(l,e,i){
   const has=e.partes&&e.partes.length;
   let h=`<div style="margin-top:8px">`;
   if(has){
     h+=`<div class="muted" style="margin-bottom:4px">Facções que fazem este processo (cada uma com seu romaneio, valor e baixa):</div>`;
-    h+=e.partes.map((p,pi)=>{const g=parteGrade(l,p);const q=totPartes(g);const cst=q*(Number(p.valor)||0);
+    h+=e.partes.map((p,pi)=>{const g=parteGrade(l,p);const q=totPartes(g);const cst=qParte(l,p)*(Number(p.valor)||0);
       const concl=p.status==="Concluído";const ret=Number(p.qtdRet)||0;
       return `<div class="card" style="background:var(--card2);margin:4px 0"><div class="between"><b>${fName(p.faccaoId)} ${concl?'<span class="pill p-ok">concluída</span>':'<span class="pill p-prod">em produção</span>'}</b><span>${q} pç · ${money(cst)}</span></div>
       <div class="muted" style="font-size:11px">${Object.keys(g).map(c=>corLabel(c)+" ("+totGrade(g[c])+")").join(", ")}</div>
@@ -601,10 +604,10 @@ function finPorFaccao(){const map={};
     if(!it.pago){m.aReceber+=it.base;if(it.concluido){m.entregue+=it.base;m.fechavel+=it.base;}else m.producao+=it.base;}
     m.itens.push(it);}
   S.lotes.forEach(l=>{const enc=!!l.encerrado;l.etapas.forEach(e=>{
-    if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(!p.faccaoId)return;const q=totPartes(parteGrade(l,p));const base=q*(Number(p.valor)||0);if(base<=0)return;
+    if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(!p.faccaoId)return;const q=qParte(l,p);const base=q*(Number(p.valor)||0);if(base<=0)return;
       add(p.faccaoId,{lote:l.numero,etapa:e.nome+" (dividida)",q,v:p.valor,base,pago:!!p.pago,concluido:(p.status==="Concluído"||e.status==="Concluído"),encerrado:enc,ref:{lid:l.id,nome:e.nome}});});return;}
-    if(!e.faccaoId)return;const base=(Number(e.qtdEnv)||0)*(Number(e.valor)||0);if(base<=0)return;
-    add(e.faccaoId,{lote:l.numero,etapa:e.nome,q:e.qtdEnv,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),encerrado:enc,ref:{lid:l.id,nome:e.nome}});
+    if(!e.faccaoId)return;const q=qEtapa(e);const base=q*(Number(e.valor)||0);if(base<=0)return;
+    add(e.faccaoId,{lote:l.numero,etapa:e.nome,q,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),encerrado:enc,ref:{lid:l.id,nome:e.nome}});
   });});const arr=Object.values(map);arr.forEach(m=>m.pendente=m.aReceber);return arr;}
 function perdaFaccao(fid){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(e.faccaoId===fid&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
 function vFin(){const dados=finPorFaccao().sort((a,b)=>b.aReceber-a.aReceber);
