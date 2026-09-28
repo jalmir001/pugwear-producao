@@ -163,7 +163,7 @@ async function cloudPull(){
   try{const {data,error}=await sb.from("app_estado").select("dados").eq("id",SB_ROW).maybeSingle();
     if(error){setSB("⚠ salvo só neste aparelho");return;}
     const d=data&&data.dados;
-    if(d&&d.lotes){S=d;if(!S.empresa)S.empresa=empresaPadrao();const mud=autoLimpaExemplos();try{localStorage.setItem("pugprod2",JSON.stringify(S));}catch(e){}render();setSB("☁ salvo na nuvem");if(mud)cloudPush();}
+    if(d&&d.lotes){S=d;if(!S.empresa)S.empresa=empresaPadrao();const m1=autoLimpaExemplos();const m2=mergeFaccoesDuplicadas();try{localStorage.setItem("pugprod2",JSON.stringify(S));}catch(e){}render();setSB("☁ salvo na nuvem");if(m1||m2)cloudPush();}
     else{cloudPush();} // nuvem vazia: sobe o que já existe aqui
   }catch(e){setSB("⚠ salvo só neste aparelho");}
 }
@@ -535,6 +535,16 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
 
 // backup
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
+function mergeFaccoesDuplicadas(){
+  const byName={};
+  S.faccoes.forEach(f=>{const k=(f.nome||'').trim().toLowerCase();if(!k)return;(byName[k]=byName[k]||[]).push(f);});
+  const remap={};
+  Object.values(byName).forEach(list=>{if(list.length<2)return;const canon=list.find(f=>f.blingId)||list.find(f=>f.cnpj)||list[0];list.forEach(f=>{if(f.id!==canon.id)remap[f.id]=canon.id;});});
+  const olds=Object.keys(remap);if(!olds.length)return false;
+  S.lotes.forEach(l=>l.etapas.forEach(e=>{if(remap[e.faccaoId])e.faccaoId=remap[e.faccaoId];if(e.partes)e.partes.forEach(p=>{if(remap[p.faccaoId])p.faccaoId=remap[p.faccaoId];});}));
+  S.faccoes=S.faccoes.filter(f=>!olds.includes(f.id));
+  return true;
+}
 function autoLimpaExemplos(){
   const temReal=(S.lotes||[]).some(l=>!(l.historico||[]).some(h=>/exemplo/i.test(h.t||"")));
   if(!temReal)return false;
