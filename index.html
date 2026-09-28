@@ -361,8 +361,10 @@ function custoCard(l){const c=custoLote(l);return `<div class="card" style="back
 function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.length;
   const danfe=e.nfe?`<div style="margin-top:6px"><button class="btn sec mini" onclick="imprimirDanfe('${l.id}',${i})">🖨️ Imprimir DANFE nº ${e.nfe.numero}</button></div>`:'';
   if(dividida){
+    const totProc=e.partes.reduce((s,p)=>s+totPartes(parteGrade(l,p)),0);
+    const custoProc=e.partes.reduce((s,p)=>s+totPartes(parteGrade(l,p))*(Number(p.valor)||0),0);
     return `<div class="step"><div class="between"><b>${e.nome}</b><span>${pill(st)} <button class="btn mini red" style="margin-left:6px" onclick="rmEtapa('${l.id}',${i})">×</button></span></div>
-    <div class="muted" style="font-size:11px;margin-top:4px">Esta etapa foi dividida entre facções — cada parte tem seu romaneio, valor e baixa própria.</div>${danfe}${divisaoHtml(l,e,i)}</div>`;
+    <div class="between" style="margin-top:4px"><span class="muted">Processo · <b>${totProc} pç</b> no total · ${e.partes.length} facções fazendo</span><span class="muted">Custo: <b style="color:var(--acc)">${money(custoProc)}</b></span></div>${danfe}${divisaoHtml(l,e,i)}</div>`;
   }
   const val=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);
   return `<div class="step"><div class="between"><b>${e.nome}</b><span>${pill(st)} <button class="btn mini red" style="margin-left:6px" onclick="rmEtapa('${l.id}',${i})">×</button></span></div>
@@ -374,8 +376,10 @@ function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.
       <div><label>Data envio</label><input type="date" value="${e.dtEnv}" onchange="setEt('${l.id}',${i},'dtEnv',this.value)"></div>
       <div><label>Previsão (retorno)</label><input type="date" value="${e.dtPrev||''}" onchange="setEt('${l.id}',${i},'dtPrev',this.value)"></div>
     </div>
-    <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b>${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}</span>
-      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>${danfe}${divisaoHtml(l,e,i)}</div>`;}
+    <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b>${(Number(e.qtdRet)>0&&Number(e.qtdEnv)>Number(e.qtdRet))?` · <b style="color:var(--warn)">perda ${Number(e.qtdEnv)-Number(e.qtdRet)} pç</b>`:''}${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}${e.pago?' · <span class="pill p-ok">pago</span>':''}</span>
+      <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>
+    <div class="row" style="margin-top:6px">${(e.faccaoId&&!e.pago&&val>0)?`<button class="btn sec mini" onclick="pagarEtapa('${l.id}',${i})">💰 Baixar pagamento da facção</button>`:''}</div>${danfe}${divisaoHtml(l,e,i)}</div>`;}
+function pagarEtapa(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];e.pago=true;if(e.partes)e.partes.forEach(p=>p.pago=true);l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${e.nome}${e.faccaoId?" ("+fName(e.faccaoId)+")":""}`});save();refreshLote(lid);toast("Baixado ✓");}
 async function imprimirDanfe(lid,i){
   const l=S.lotes.find(x=>x.id===lid); if(!l)return; const e=l.etapas[i]; if(!e||!e.nfe)return;
   toast("Abrindo DANFE…");
@@ -392,7 +396,7 @@ function divisaoHtml(l,e,i){
   const has=e.partes&&e.partes.length;
   let h=`<div style="margin-top:8px">`;
   if(has){
-    h+=`<div class="muted" style="margin-bottom:4px">✂️ Etapa dividida (os campos acima são ignorados):</div>`;
+    h+=`<div class="muted" style="margin-bottom:4px">Facções que fazem este processo (cada uma com seu romaneio, valor e baixa):</div>`;
     h+=e.partes.map((p,pi)=>{const g=parteGrade(l,p);const q=totPartes(g);const cst=q*(Number(p.valor)||0);
       return `<div class="card" style="background:var(--card2);margin:4px 0"><div class="between"><b>${fName(p.faccaoId)}</b><span>${q} pç · ${money(cst)}</span></div>
       <div class="muted" style="font-size:11px">${Object.keys(g).map(c=>corLabel(c)+" ("+totGrade(g[c])+")").join(", ")}</div>
