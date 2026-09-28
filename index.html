@@ -393,13 +393,37 @@ function divisaoHtml(l,e,i){
   }
   return h+`</div>`;
 }
-function dividirEtapa(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const cores=Object.keys(c0);
+function dividirEtapa(lid,i,pre){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const cores=Object.keys(c0);
   const atual={};(e.partes||[]).forEach(p=>Object.keys(p.grade||{}).forEach(c=>atual[c]=p.faccaoId));
-  const opt=sel=>`<option value="">—</option>`+S.faccoes.map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${x.nome}</option>`).join("");
+  if(pre)Object.keys(pre).forEach(c=>{if(pre[c])atual[c]=pre[c];});
+  const fl=S.faccoes.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const opt=sel=>`<option value="">—</option>`+fl.map(x=>`<option value="${x.id}" ${x.id===sel?"selected":""}>${x.nome}</option>`).join("");
   openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button><h2>Dividir "${e.nome}"</h2>
     <div class="hint">Escolha qual facção faz cada cor. Cada facção vira uma parte com romaneio e valor próprios. (Divisão por cor.)</div>
+    <div class="row" style="margin:6px 0;gap:8px;align-items:center"><button class="btn sec mini" type="button" onclick="puxarFaccoesDivisao('${lid}',${i})">📋 Puxar facções do Bling</button><span class="muted" style="font-size:11px">${S.faccoes.length} facção(ões) na lista · digite pra filtrar no seletor</span></div>
     ${cores.map(c=>`<div class="between" style="margin:8px 0"><b>${corLabel(c)} <span class="muted">(${totGrade(c0[c])} pç)</span></b><select id="dv_${c}" style="width:auto;padding:6px 8px">${opt(atual[c]||"")}</select></div>`).join("")}
     <button class="btn" style="width:100%;margin-top:12px" onclick="salvarDivisao('${lid}',${i})">Salvar divisão</button>`);}
+async function carregarFaccoesBlingParaLista(){
+  const {status,data}=await blingApi("fornecedores",{});
+  const lista=(data&&data.fornecedores)||[];
+  if(status!==200||!lista.length)return {ok:false,add:0};
+  let add=0;
+  lista.forEach(c=>{const bid=String(c.id);
+    const existe=S.faccoes.some(f=>String(f.blingId)===bid||(f.nome||'').trim().toLowerCase()===(c.nome||'').trim().toLowerCase());
+    if(!existe){S.faccoes.push({id:uid(),nome:c.nome,servico:"Costura",valor:0,cnpj:c.doc||"",endereco:"",blingId:bid});add++;}});
+  if(add)save();
+  return {ok:true,add};
+}
+function puxarFaccoesDivisao(lid,i){
+  const l=S.lotes.find(x=>x.id===lid);const c0=coresDe(l);
+  const pre={};Object.keys(c0).forEach(c=>{const el=document.getElementById("dv_"+c);if(el&&el.value)pre[c]=el.value;});
+  toast("Puxando facções do Bling…");
+  carregarFaccoesBlingParaLista().then(r=>{
+    if(!r.ok){toast("Não consegui puxar do Bling");return;}
+    dividirEtapa(lid,i,pre);
+    toast(r.add?("+"+r.add+" facções carregadas ✓"):"Facções já estavam na lista");
+  }).catch(()=>toast("Erro ao puxar do Bling"));
+}
 function salvarDivisao(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const grupos={};
   Object.keys(c0).forEach(c=>{const fid=(document.getElementById("dv_"+c)||{}).value||"";if(!fid)return;
     if(!grupos[fid]){const f=S.faccoes.find(x=>x.id===fid);grupos[fid]={faccaoId:fid,valor:f?f.valor:0,grade:{},status:"Em produção",pago:false};}
