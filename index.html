@@ -249,7 +249,7 @@ function vPainel(){
   const pecas=L.reduce((s,l)=>s+totLote(l),0),aPagar=finPorFaccao().reduce((s,f)=>s+f.pendente,0);
   document.getElementById("app").innerHTML=`
     <div class="kpis"><div class="kpi"><b>${L.length}</b><span>LOTES</span></div><div class="kpi"><b>${abertos}</b><span>EM ABERTO</span></div><div class="kpi"><b style="color:${atr?'var(--red)':'inherit'}">${atr}</b><span>ATRASADOS</span></div><div class="kpi"><b>${pecas}</b><span>PEÇAS</span></div></div>
-    <div class="card" style="margin-top:12px"><div class="between"><h2 style="margin:0">A pagar às facções</h2><b class="tot" style="color:var(--acc)">${money(aPagar)}</b></div><div class="muted">Total pendente por facção.</div></div>
+    <div class="card" style="margin-top:12px;cursor:pointer" onclick="document.querySelector('.tabbar button[data-t=fin]').click()"><div class="between"><h2 style="margin:0">A pagar às facções ›</h2><b class="tot" style="color:var(--acc)">${money(aPagar)}</b></div><div class="muted">Toque pra ver por facção (entregue, em produção e fechamento do mês).</div></div>
     <div class="card"><div class="between"><h2 style="margin:0">Lotes em andamento</h2><button class="btn mini" onclick="novoLote()">+ Novo lote</button></div>
     ${L.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l))).map(cardLote).join("")||'<div class="muted">Nenhum lote em andamento.</div>'}</div>
     <div class="card"><div class="between"><h2 style="margin:0">Dados da empresa (cabeçalho do romaneio)</h2><button class="btn sec mini" onclick="editEmpresa()">editar</button></div><div class="muted"><b>${S.empresa.nome}</b>${S.empresa.cnpj?" · CNPJ "+S.empresa.cnpj:""}${S.empresa.endereco?"<br>"+S.empresa.endereco:""}</div></div>
@@ -352,7 +352,10 @@ function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">�
     <div class="row" style="margin-top:14px">${l.encerrado?`<button class="btn sec mini" onclick="setLoteFlag('${l.id}','encerrado',false)">↩️ Reabrir lote</button>`:`<button class="btn mini" onclick="setLoteFlag('${l.id}','encerrado',true)">✔️ Encerrar lote</button>`}<button class="btn red mini" onclick="delLote('${l.id}')">Excluir</button></div>`;}
 function abrirLote(id){openSheet(loteSheetHtml(S.lotes.find(x=>x.id===id)));}
 function refreshLote(id){const s=document.getElementById("sheet");const y=s.scrollTop;s.innerHTML=loteSheetHtml(S.lotes.find(x=>x.id===id));s.scrollTop=y;}
-function custoLote(l){const mo=l.etapas.reduce((s,e)=>s+(Number(e.valor)||0)*(Number(e.qtdEnv)||0),0);const tot=totLote(l);const mp=(Number(l.custoMP)||0)*tot;const total=mo+mp;return{mo,mp,total,porPeca:tot?total/tot:0};}
+function custoLote(l){let mo=0;l.etapas.forEach(e=>{
+    if(e.partes&&e.partes.length){e.partes.forEach(p=>{mo+=totPartes(parteGrade(l,p))*(Number(p.valor)||0);});}
+    else{mo+=(Number(e.valor)||0)*(Number(e.qtdEnv)||0);}});
+  const tot=totLote(l);const mp=(Number(l.custoMP)||0)*tot;const total=mo+mp;return{mo,mp,total,porPeca:tot?total/tot:0};}
 function custoCard(l){const c=custoLote(l);return `<div class="card" style="background:var(--card2);margin-top:12px"><div class="between"><h2 style="margin:0;font-size:13px">Custo</h2><span>Por peça: <b style="color:var(--acc)">${money(c.porPeca)}</b></span></div>
   <div class="grid2" style="margin-top:6px"><div><label>Matéria-prima / peça</label><input type="number" step="0.01" value="${l.custoMP||0}" onchange="setLoteNum('${l.id}','custoMP',this.value)"></div><div><label>Composição</label><div class="muted">Mão de obra: ${money(c.mo)}<br>Matéria-prima: ${money(c.mp)}<br><b>Total: ${money(c.total)}</b></div></div></div></div>`;}
 function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.length;
@@ -576,33 +579,50 @@ async function usarFaccaoBling(ctx,id,nome){
 function delFaccao(id){if(confirm("Excluir facção?")){S.faccoes=S.faccoes.filter(x=>x.id!==id);save();render();}}
 
 // ---------- FINANCEIRO ----------
-function finPorFaccao(){const map={};S.lotes.forEach(l=>l.etapas.forEach(e=>{
+function finPorFaccao(){const map={};
+  function add(fid,it){if(!map[fid])map[fid]={faccaoId:fid,total:0,aReceber:0,entregue:0,producao:0,fechavel:0,itens:[]};const m=map[fid];
+    m.total+=it.base;
+    if(!it.pago){m.aReceber+=it.base;if(it.concluido)m.entregue+=it.base;else m.producao+=it.base;if(it.encerrado)m.fechavel+=it.base;}
+    m.itens.push(it);}
+  S.lotes.forEach(l=>{const enc=!!l.encerrado;l.etapas.forEach(e=>{
     if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(!p.faccaoId)return;const q=totPartes(parteGrade(l,p));const base=q*(Number(p.valor)||0);if(base<=0)return;
-      map[p.faccaoId]=map[p.faccaoId]||{faccaoId:p.faccaoId,total:0,pendente:0,itens:[]};map[p.faccaoId].total+=base;if(!p.pago)map[p.faccaoId].pendente+=base;
-      map[p.faccaoId].itens.push({lote:l.numero,etapa:e.nome+" (dividida)",q,v:p.valor,base,pago:p.pago,ref:{lid:l.id,nome:e.nome}});});return;}
+      add(p.faccaoId,{lote:l.numero,etapa:e.nome+" (dividida)",q,v:p.valor,base,pago:!!p.pago,concluido:(p.status==="Concluído"||e.status==="Concluído"),encerrado:enc,ref:{lid:l.id,nome:e.nome}});});return;}
     if(!e.faccaoId)return;const base=(Number(e.qtdEnv)||0)*(Number(e.valor)||0);if(base<=0)return;
-    map[e.faccaoId]=map[e.faccaoId]||{faccaoId:e.faccaoId,total:0,pendente:0,itens:[]};map[e.faccaoId].total+=base;if(!e.pago)map[e.faccaoId].pendente+=base;
-    map[e.faccaoId].itens.push({lote:l.numero,etapa:e.nome,q:e.qtdEnv,v:e.valor,base,pago:e.pago,ref:{lid:l.id,nome:e.nome}});}));return Object.values(map);}
+    add(e.faccaoId,{lote:l.numero,etapa:e.nome,q:e.qtdEnv,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),encerrado:enc,ref:{lid:l.id,nome:e.nome}});
+  });});const arr=Object.values(map);arr.forEach(m=>m.pendente=m.aReceber);return arr;}
 function perdaFaccao(fid){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(e.faccaoId===fid&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
-function vFin(){const dados=finPorFaccao(),totalPend=dados.reduce((s,f)=>s+f.pendente,0);
-  document.getElementById("app").innerHTML=`<div class="card"><div class="between"><h2 style="margin:0">Fechamento por facção</h2><b class="tot" style="color:var(--acc)">${money(totalPend)}</b></div><div class="muted">Total pendente. No app final, gera a conta a pagar no Bling.</div></div>
-  ${dados.map(f=>`<div class="card"><div class="between"><b>${fName(f.faccaoId)}</b><span>Pendente: <b style="color:var(--acc)">${money(f.pendente)}</b></span></div>
-    <table><tr><th>Lote</th><th>Etapa</th><th class="right">Qtd</th><th class="right">Valor</th><th class="right">Total</th><th></th></tr>
-    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td class="right">${it.q}</td><td class="right">${money(it.v)}</td><td class="right">${money(it.base)}</td><td class="right">${it.pago?'<span class="pill p-ok">pago</span>':`<button class="btn mini" onclick="marcarPago('${it.ref.lid}','${it.ref.nome}')">baixar</button>`}</td></tr>`).join("")}</table>
+function vFin(){const dados=finPorFaccao().sort((a,b)=>b.aReceber-a.aReceber);
+  const totalReceber=dados.reduce((s,f)=>s+f.aReceber,0);
+  const totalFech=dados.reduce((s,f)=>s+f.fechavel,0);
+  const totalProd=dados.reduce((s,f)=>s+f.producao,0);
+  const totalEntr=dados.reduce((s,f)=>s+f.entregue,0);
+  document.getElementById("app").innerHTML=`
+  <div class="card"><div class="between"><h2 style="margin:0">Fechamento do mês</h2><b class="tot" style="color:var(--acc)">${money(totalFech)}</b></div>
+    <div class="muted">Soma só dos <b>lotes encerrados</b> — é o que entra no pagamento do mês. Lote ainda em produção não entra aqui; só quando você marcar <b>encerrar lote</b>.</div>
+    <div class="muted" style="margin-top:6px">Entregue (pronto, lote aberto): <b>${money(totalEntr)}</b> · Em produção (com as facções): <b>${money(totalProd)}</b> · A receber no total: <b>${money(totalReceber)}</b></div></div>
+  ${dados.map(f=>`<div class="card"><div class="between"><b>${fName(f.faccaoId)}</b><span>A receber: <b style="color:var(--acc)">${money(f.aReceber)}</b></span></div>
+    <div class="muted" style="margin:4px 0">Entregue: <b>${money(f.entregue)}</b> · Em produção: <b>${money(f.producao)}</b>${f.fechavel>0?` · <b style="color:var(--acc)">Fechável (encerrado): ${money(f.fechavel)}</b>`:''}</div>
+    <table><tr><th>Lote</th><th>Etapa</th><th class="right">Qtd</th><th class="right">Valor</th><th class="right">Total</th><th>Situação</th><th></th></tr>
+    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td class="right">${it.q}</td><td class="right">${money(it.v)}</td><td class="right">${money(it.base)}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.encerrado?'<span class="pill" style="background:var(--acc);color:#022">encerrado</span>':(it.concluido?'entregue':'produção'))}</td><td class="right">${it.pago?'':`<button class="btn mini" onclick="marcarPago('${it.ref.lid}','${it.ref.nome}')">baixar</button>`}</td></tr>`).join("")}</table>
     ${(()=>{const p=perdaFaccao(f.faccaoId);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
-    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.faccaoId}')">🧾 Gerar conta a pagar no Bling</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.faccaoId}')"${f.fechavel<=0?' disabled title="Sem lote encerrado"':''}>🧾 Fechar no Bling (só encerrados)</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
 async function gerarContaPagar(faccaoId){
   const f=S.faccoes.find(x=>x.id===faccaoId); if(!f){return;}
-  const fin=finPorFaccao().find(x=>x.faccaoId===faccaoId); if(!fin||fin.pendente<=0){alert("Não há valor pendente para esta facção.");return;}
+  const fin=finPorFaccao().find(x=>x.faccaoId===faccaoId); if(!fin||fin.fechavel<=0){alert("Não há lote ENCERRADO com valor pendente para esta facção.\n\nMarque o lote como \"Encerrar lote\" pra ele entrar no fechamento do mês.");return;}
   if(!f.blingId){alert("Esta facção não está vinculada ao Bling. Edite a facção e use \"Buscar no Bling\" pra vincular antes de gerar a conta.");return;}
   const venc=prompt("Vencimento da conta (AAAA-MM-DD):",hoje()); if(!venc)return;
-  if(!confirm(`Gerar conta a pagar no Bling?\n\nFacção: ${f.nome}\nValor: ${money(fin.pendente)}\nVencimento: ${venc}`))return;
+  if(!confirm(`Fechar pagamento no Bling (só lotes encerrados)?\n\nFacção: ${f.nome}\nValor: ${money(fin.fechavel)}\nVencimento: ${venc}`))return;
   toast("Gerando no Bling…");
   try{
-    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,valor:fin.pendente,vencimento:venc,historico:"Produção — "+f.nome})});
+    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,valor:fin.fechavel,vencimento:venc,historico:"Fechamento produção — "+f.nome})});
     if(status>=200&&status<300&&data&&data.data&&data.data.id){
-      f.itensPagos=(f.itensPagos||0); // marcador simples
-      alert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")");
+      // dá baixa nos itens de lotes encerrados dessa facção (não contar de novo mês que vem)
+      S.lotes.forEach(l=>{if(!l.encerrado)return;let mexeu=false;l.etapas.forEach(e=>{
+        if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId===faccaoId&&!p.pago){p.pago=true;mexeu=true;}});}
+        else if(e.faccaoId===faccaoId&&!e.pago){e.pago=true;mexeu=true;}});
+        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Fechamento pago (Bling nº ${data.data.id}) — ${f.nome}`});});
+      save();render();
+      alert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")\nItens dos lotes encerrados foram baixados.");
     } else {
       alert("Não consegui criar a conta no Bling.\n"+(JSON.stringify(data).slice(0,200)));
     }
