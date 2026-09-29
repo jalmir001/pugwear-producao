@@ -537,12 +537,18 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
 
 // backup
 // ---------- ETIQUETAS ----------
-function gerarEtiquetasDeGrid(ref,nome,grid,tams){
+function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos){
   ref=(ref||'').trim(); tams=tams&&tams.length?tams:TAMS;
-  if(!ref){alert('Informe a referência (SKU base), ex: C-BP-001.');return;}
-  let itens=[];
-  Object.keys(grid||{}).forEach(cor=>{tams.forEach(tam=>{const q=Number((grid[cor]||{})[tam])||0;for(let k=0;k<q;k++)itens.push({cor,tam,sku:[ref,cor,tam].filter(Boolean).join('-')});});});
-  if(!itens.length){alert('Digite ao menos 1 quantidade na grade.');return;}
+  const temReais=codigos&&Object.keys(codigos).length;
+  if(!ref&&!temReais){alert('Informe a referência (SKU base), ex: C-BP-001, ou puxe o produto do Bling.');return;}
+  let itens=[],faltando=[];
+  Object.keys(grid||{}).forEach(cor=>{tams.forEach(tam=>{const q=Number((grid[cor]||{})[tam])||0;if(q<=0)return;
+    let sku=temReais&&codigos[cor]&&codigos[cor][tam];
+    if(!sku){ if(temReais){faltando.push(corLabel(cor)+' '+tam);return;} sku=[ref,cor,tam].filter(Boolean).join('-'); }
+    for(let k=0;k<q;k++)itens.push({cor,tam,sku});
+  });});
+  if(temReais&&faltando.length){ if(!confirm('Estas variações NÃO têm código cadastrado no Bling e vão ficar de fora (pra não gerar código errado):\n\n'+faltando.join(', ')+'\n\nGerar o restante mesmo assim?'))return; }
+  if(!itens.length){alert('Nada pra gerar. Digite quantidade nas variações que têm código no Bling.');return;}
   if(itens.length>2000&&!confirm('Vão sair '+itens.length+' etiquetas. Continuar?'))return;
   const labels=itens.map(it=>`<div class="et"><div class="nm">${(nome||'').toString()}</div><div class="ct">${corLabel(it.cor)} &middot; ${it.tam}</div><svg class="bc" data-sku="${it.sku}"></svg></div>`).join('');
   const w=window.open('','_blank');
@@ -557,9 +563,16 @@ function gerarEtiquetasDeGrid(ref,nome,grid,tams){
   '</body></html>');
   w.document.close();
 }
-function _etLoad(l){window._ET={ref:l.ref||'',nome:l.produto||'',tams:TAMS.slice(),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l)))};}
-function etqAbrirDoLote(id){const l=S.lotes.find(x=>x.id===id);if(!l)return;_etLoad(l);document.querySelector('.tabbar button[data-t=etiq]').click();}
-function etqDoLote(lid){if(!lid){return;}const l=S.lotes.find(x=>x.id===lid);_etLoad(l);vEtiq();}
+function _etLoad(l){window._ET={ref:l.ref||'',nome:l.produto||'',tams:TAMS.slice(),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l))),codigos:null};}
+async function etqPullCodigos(ref){ // busca os códigos REAIS no Bling pra não gerar SKU errado
+  ref=(ref||'').trim(); if(!ref)return;
+  try{const {status,data}=await blingApi('produto',{ref});
+    if(status===200&&data.codigos){window._ET.codigos=data.codigos;if(data.produto&&!window._ET.nome)window._ET.nome=data.produto;vEtiq();
+      const el=document.getElementById('etqAviso');if(el)el.textContent='✓ códigos reais puxados do Bling';}
+  }catch(e){}
+}
+function etqAbrirDoLote(id){const l=S.lotes.find(x=>x.id===id);if(!l)return;_etLoad(l);document.querySelector('.tabbar button[data-t=etiq]').click();setTimeout(()=>etqPullCodigos(l.ref),100);}
+function etqDoLote(lid){if(!lid){return;}const l=S.lotes.find(x=>x.id===lid);_etLoad(l);vEtiq();etqPullCodigos(l.ref);}
 async function etqDoBling(){
   const ref=(document.getElementById('etqRef').value||'').trim();
   if(!ref){alert('Digite a referência do produto (ex: C-BP-001).');return;}
@@ -567,14 +580,14 @@ async function etqDoBling(){
   try{
     const {status,data}=await blingApi('produto',{ref});
     if(status!==200||!data.cores||!data.cores.length){alert('Não encontrei cores pra "'+ref+'" no Bling.');return;}
-    window._ET={ref,nome:data.produto||ref,tams:data.tamanhos||TAMS.slice(),cores:data.cores,grid:{}};
+    window._ET={ref,nome:data.produto||ref,tams:data.tamanhos||TAMS.slice(),cores:data.cores,grid:{},codigos:data.codigos||null};
     vEtiq();toast(data.cores.length+' cores puxadas ✓');
   }catch(e){alert('Erro ao puxar do Bling. Tente de novo.');}
 }
 function etqSet(cor,tam,val){const E=window._ET;if(!E)return;E.grid[cor]=E.grid[cor]||{};E.grid[cor][tam]=Number(val)||0;const el=document.getElementById('etqTot');if(el)el.textContent=etqTotal();}
 function etqTotal(){const E=window._ET;if(!E)return 0;return E.cores.reduce((s,cor)=>s+E.tams.reduce((a,t)=>a+(Number((E.grid[cor]||{})[t])||0),0),0);}
 function etqPreencher(){const E=window._ET;if(!E||!E.cores.length){alert('Carregue um lote ou produto primeiro.');return;}const v=Number(document.getElementById('etqFill').value)||0;E.cores.forEach(cor=>{E.grid[cor]=E.grid[cor]||{};E.tams.forEach(t=>E.grid[cor][t]=v);});vEtiq();}
-function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams);}
+function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams,E.codigos);}
 function vEtiq(){
   const E=window._ET||(window._ET={ref:'',nome:'',tams:TAMS.slice(),cores:[],grid:{}});
   let grade;
@@ -590,6 +603,7 @@ function vEtiq(){
    <div class="row"><select id="etqLote" style="flex:1"><option value="">— escolher lote —</option>${S.lotes.map(l=>`<option value="${l.id}">#${l.numero} · ${l.produto}${l.ref?(' ('+l.ref+')'):''}</option>`).join('')}</select><button class="btn sec mini" onclick="etqDoLote(document.getElementById('etqLote').value)">carregar</button></div>
    <label style="margin-top:10px">Ou de um produto do Bling (referência)</label>
    <div class="row"><input id="etqRef" placeholder="ex: C-BP-001" style="flex:1"><button class="btn sec mini" onclick="etqDoBling()">Puxar do Bling</button></div>
+   <div id="etqAviso" class="muted" style="margin-top:8px;font-size:12px">${E.codigos?'✓ usando os códigos reais do Bling':(E.cores.length?'⚠ ainda sem códigos reais do Bling — puxe pra garantir o código certo':'')}</div>
   </div>
   <div class="card">
    <div class="grid2"><div><label>Nome no rótulo</label><input id="etqNome" value="${(E.nome||'').replace(/"/g,'&quot;')}"></div><div><label>Referência (SKU base)</label><input id="etqRefBase" value="${(E.ref||'').replace(/"/g,'&quot;')}"></div></div>
