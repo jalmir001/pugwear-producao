@@ -179,6 +179,7 @@ export default async function handler(req, res) {
       // percorre todo o catálogo (a busca do Bling por texto não devolve tudo) e filtra pelo prefixo do código
       const cores = {};
       const codigos = {}; // cor -> tam -> código REAL do Bling (SKU exato, sem remontar)
+      const precos = {};  // cor -> tam -> preço do Bling
       let nome = '', pagina = 1, continua = true, vistos = 0;
       while (continua && pagina <= 12) {
         const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
@@ -195,13 +196,19 @@ export default async function handler(req, res) {
           cores[cor][tam] = 0;
           codigos[cor] = codigos[cor] || {};
           codigos[cor][tam] = p.codigo; // código exato como está no Bling
+          precos[cor] = precos[cor] || {};
+          precos[cor][tam] = Number(p.preco) || 0;
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
           vistos++;
         }
         continua = arr.length === 100;
         pagina++;
       }
-      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, codigos: codigos, tamanhos: TAMS, variacoes: vistos });
+      // preço mais comum como padrão do produto
+      let precoPadrao = 0; const cont = {};
+      Object.values(precos).forEach(o => Object.values(o).forEach(v => { if (v > 0) { cont[v] = (cont[v] || 0) + 1; } }));
+      let melhor = 0; Object.keys(cont).forEach(v => { if (cont[v] > melhor) { melhor = cont[v]; precoPadrao = Number(v); } });
+      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, codigos: codigos, precos: precos, precoPadrao: precoPadrao, tamanhos: TAMS, variacoes: vistos });
     }
     if (action === 'conta-pagar' && req.method === 'POST') {
       const b = req.body || {};
