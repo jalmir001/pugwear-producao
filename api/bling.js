@@ -125,6 +125,19 @@ export default async function handler(req, res) {
     return res.status(401).json({ erro: 'nao_autorizado' });
   }
 
+  // ---- Proxy simples pro Olist/Tiny (token vem no header, não é guardado) ----
+  if (action === 'olist-get') {
+    const path = (req.query.path || '').toString();
+    const otok = req.headers['x-olist-token'];
+    if (!path || !otok) return res.status(400).json({ erro: 'faltando_path_ou_token' });
+    try {
+      const r = await fetch('https://api.tiny.com.br/public-api/v3' + path, { headers: { Authorization: 'Bearer ' + otok, Accept: 'application/json' } });
+      const txt = await r.text();
+      let b; try { b = txt ? JSON.parse(txt) : {}; } catch (e) { b = { raw: txt.slice(0, 400) }; }
+      return res.status(r.status).json(b);
+    } catch (e) { return res.status(502).json({ erro: 'olist_falha', detalhe: String(e.message || e) }); }
+  }
+
   let token;
   try { token = await getToken(); }
   catch (e) { return res.status(500).json({ erro: 'token', detalhe: String(e.message || e), diag: e.diag || null }); }
