@@ -348,6 +348,7 @@ function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">�
       <select id="destEt" class="btn sec mini" style="width:auto;padding:7px 10px"><option value="">Romaneio: todas</option>${l.etapas.map((e,i)=>`<option value="${i}">→ ${e.nome}</option>`).join("")}</select>
       <button class="btn sec mini" onclick="printRomaneio('${l.id}')">🖨️ Imprimir</button>
       <button class="btn sec mini" onclick="emitirRemessa('${l.id}')">🧾 Emitir NF remessa</button>
+      <button class="btn sec mini" onclick="printEtiquetas('${l.id}')">🏷️ Imprimir etiquetas</button>
     </div>
     ${custoCard(l)}
     ${l.foto?`<img src="${l.foto}" style="width:100%;border-radius:10px;margin:10px 0 4px"><div class="muted" style="margin-bottom:8px">Foto da grade (referência).</div>`:""}
@@ -534,6 +535,29 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
   <scr`+`ipt>window.onload=function(){window.print()}<\/scr`+`ipt></body></html>`);w.document.close();}
 
 // backup
+function skuEtiq(l,cor,tam){return [l.ref,cor,tam].filter(Boolean).join('-');}
+function printEtiquetas(id){
+  const l=S.lotes.find(x=>x.id===id);
+  if(!l.ref){alert('Este lote não tem referência (SKU base). Coloque a referência do produto antes de gerar etiquetas.');return;}
+  const c=coresDe(l);const cores=Object.keys(c);const total=totLote(l);
+  const porPeca=confirm('Gerar etiquetas do lote #'+l.numero+'?\n\nOK = 1 etiqueta por peça (total '+total+')\nCancelar = 1 por variação (cor/tamanho)');
+  let itens=[];
+  cores.forEach(cor=>{TAMS.forEach(tam=>{const q=Number(c[cor][tam])||0;if(q<=0)return;const n=porPeca?q:1;for(let k=0;k<n;k++)itens.push({cor,tam,sku:skuEtiq(l,cor,tam)});});});
+  if(!itens.length){alert('Sem quantidade na grade pra gerar etiquetas.');return;}
+  const nome=(l.produto||'').toString();
+  const labels=itens.map(it=>`<div class="et"><div class="nm">${nome}</div><div class="ct">${corLabel(it.cor)} &middot; ${it.tam}</div><svg class="bc" data-sku="${it.sku}"></svg></div>`).join('');
+  const w=window.open('','_blank');
+  w.document.write('<html><head><title>Etiquetas #'+l.numero+'</title>'+
+  '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></scr'+'ipt>'+
+  '<style>@page{size:100mm auto;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif}'+
+  '.wrap{width:100mm;display:flex;flex-wrap:wrap}'+
+  '.et{width:50mm;height:75mm;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-inside:avoid;overflow:hidden}'+
+  '.nm{font-size:11pt;font-weight:bold;line-height:1.15;margin-bottom:2mm}.ct{font-size:10pt;margin-bottom:3mm}.bc{width:44mm;height:24mm}'+
+  '</style></head><body><div class="wrap">'+labels+'</div>'+
+  '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:12,height:60,margin:0});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
+  '</body></html>');
+  w.document.close();
+}
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
 function mergeFaccoesDuplicadas(){
   const byName={};
