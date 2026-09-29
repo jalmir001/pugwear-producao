@@ -66,6 +66,7 @@
   <button data-t="lotes"><span class="ic">▣</span>Lotes</button>
   <button data-t="faccoes"><span class="ic">✂</span>Facções</button>
   <button data-t="fin"><span class="ic">$</span>Financeiro</button>
+  <button data-t="etiq"><span class="ic">🏷️</span>Etiquetas</button>
 </div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <div id="toast"></div>
@@ -247,7 +248,7 @@ function fName(id){const f=S.faccoes.find(x=>x.id===id);return f?f.nome:"—";}
 
 let TAB="painel";
 document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));render();});
-function render(){({painel:vPainel,lotes:vLotes,faccoes:vFaccoes,fin:vFin}[TAB])();}
+function render(){({painel:vPainel,lotes:vLotes,faccoes:vFaccoes,fin:vFin,etiq:vEtiq}[TAB])();}
 
 // ---------- PAINEL ----------
 function vPainel(){
@@ -348,7 +349,7 @@ function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">�
       <select id="destEt" class="btn sec mini" style="width:auto;padding:7px 10px"><option value="">Romaneio: todas</option>${l.etapas.map((e,i)=>`<option value="${i}">→ ${e.nome}</option>`).join("")}</select>
       <button class="btn sec mini" onclick="printRomaneio('${l.id}')">🖨️ Imprimir</button>
       <button class="btn sec mini" onclick="emitirRemessa('${l.id}')">🧾 Emitir NF remessa</button>
-      <button class="btn sec mini" onclick="printEtiquetas('${l.id}')">🏷️ Imprimir etiquetas</button>
+      <button class="btn sec mini" onclick="etqAbrirDoLote('${l.id}')">🏷️ Imprimir etiquetas</button>
     </div>
     ${custoCard(l)}
     ${l.foto?`<img src="${l.foto}" style="width:100%;border-radius:10px;margin:10px 0 4px"><div class="muted" style="margin-bottom:8px">Foto da grade (referência).</div>`:""}
@@ -535,19 +536,17 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
   <scr`+`ipt>window.onload=function(){window.print()}<\/scr`+`ipt></body></html>`);w.document.close();}
 
 // backup
-function skuEtiq(l,cor,tam){return [l.ref,cor,tam].filter(Boolean).join('-');}
-function printEtiquetas(id){
-  const l=S.lotes.find(x=>x.id===id);
-  if(!l.ref){alert('Este lote não tem referência (SKU base). Coloque a referência do produto antes de gerar etiquetas.');return;}
-  const c=coresDe(l);const cores=Object.keys(c);const total=totLote(l);
-  const porPeca=confirm('Gerar etiquetas do lote #'+l.numero+'?\n\nOK = 1 etiqueta por peça (total '+total+')\nCancelar = 1 por variação (cor/tamanho)');
+// ---------- ETIQUETAS ----------
+function gerarEtiquetasDeGrid(ref,nome,grid,tams){
+  ref=(ref||'').trim(); tams=tams&&tams.length?tams:TAMS;
+  if(!ref){alert('Informe a referência (SKU base), ex: C-BP-001.');return;}
   let itens=[];
-  cores.forEach(cor=>{TAMS.forEach(tam=>{const q=Number(c[cor][tam])||0;if(q<=0)return;const n=porPeca?q:1;for(let k=0;k<n;k++)itens.push({cor,tam,sku:skuEtiq(l,cor,tam)});});});
-  if(!itens.length){alert('Sem quantidade na grade pra gerar etiquetas.');return;}
-  const nome=(l.produto||'').toString();
-  const labels=itens.map(it=>`<div class="et"><div class="nm">${nome}</div><div class="ct">${corLabel(it.cor)} &middot; ${it.tam}</div><svg class="bc" data-sku="${it.sku}"></svg></div>`).join('');
+  Object.keys(grid||{}).forEach(cor=>{tams.forEach(tam=>{const q=Number((grid[cor]||{})[tam])||0;for(let k=0;k<q;k++)itens.push({cor,tam,sku:[ref,cor,tam].filter(Boolean).join('-')});});});
+  if(!itens.length){alert('Digite ao menos 1 quantidade na grade.');return;}
+  if(itens.length>2000&&!confirm('Vão sair '+itens.length+' etiquetas. Continuar?'))return;
+  const labels=itens.map(it=>`<div class="et"><div class="nm">${(nome||'').toString()}</div><div class="ct">${corLabel(it.cor)} &middot; ${it.tam}</div><svg class="bc" data-sku="${it.sku}"></svg></div>`).join('');
   const w=window.open('','_blank');
-  w.document.write('<html><head><title>Etiquetas #'+l.numero+'</title>'+
+  w.document.write('<html><head><title>Etiquetas</title>'+
   '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></scr'+'ipt>'+
   '<style>@page{size:100mm auto;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif}'+
   '.wrap{width:100mm;display:flex;flex-wrap:wrap}'+
@@ -557,6 +556,47 @@ function printEtiquetas(id){
   '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:12,height:60,margin:0});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
   w.document.close();
+}
+function _etLoad(l){window._ET={ref:l.ref||'',nome:l.produto||'',tams:TAMS.slice(),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l)))};}
+function etqAbrirDoLote(id){const l=S.lotes.find(x=>x.id===id);if(!l)return;_etLoad(l);document.querySelector('.tabbar button[data-t=etiq]').click();}
+function etqDoLote(lid){if(!lid){return;}const l=S.lotes.find(x=>x.id===lid);_etLoad(l);vEtiq();}
+async function etqDoBling(){
+  const ref=(document.getElementById('etqRef').value||'').trim();
+  if(!ref){alert('Digite a referência do produto (ex: C-BP-001).');return;}
+  toast('Puxando '+ref+' do Bling…');
+  try{
+    const {status,data}=await blingApi('produto',{ref});
+    if(status!==200||!data.cores||!data.cores.length){alert('Não encontrei cores pra "'+ref+'" no Bling.');return;}
+    window._ET={ref,nome:data.produto||ref,tams:data.tamanhos||TAMS.slice(),cores:data.cores,grid:{}};
+    vEtiq();toast(data.cores.length+' cores puxadas ✓');
+  }catch(e){alert('Erro ao puxar do Bling. Tente de novo.');}
+}
+function etqSet(cor,tam,val){const E=window._ET;if(!E)return;E.grid[cor]=E.grid[cor]||{};E.grid[cor][tam]=Number(val)||0;const el=document.getElementById('etqTot');if(el)el.textContent=etqTotal();}
+function etqTotal(){const E=window._ET;if(!E)return 0;return E.cores.reduce((s,cor)=>s+E.tams.reduce((a,t)=>a+(Number((E.grid[cor]||{})[t])||0),0),0);}
+function etqPreencher(){const E=window._ET;if(!E||!E.cores.length){alert('Carregue um lote ou produto primeiro.');return;}const v=Number(document.getElementById('etqFill').value)||0;E.cores.forEach(cor=>{E.grid[cor]=E.grid[cor]||{};E.tams.forEach(t=>E.grid[cor][t]=v);});vEtiq();}
+function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams);}
+function vEtiq(){
+  const E=window._ET||(window._ET={ref:'',nome:'',tams:TAMS.slice(),cores:[],grid:{}});
+  let grade;
+  if(E.cores.length){
+    grade='<div class="gwrap"><table class="g"><thead><tr><th>Cor</th>'+E.tams.map(t=>`<th>${t}</th>`).join('')+'</tr></thead><tbody>'+
+    E.cores.map(cor=>`<tr><td>${corLabel(cor)}</td>`+E.tams.map(t=>`<td><input type="number" min="0" value="${(E.grid[cor]&&E.grid[cor][t])||''}" style="width:52px;padding:4px" oninput="etqSet('${cor}','${t}',this.value)"></td>`).join('')+'</tr>').join('')+
+    '</tbody></table></div>';
+  } else { grade='<div class="muted">Escolha um lote ou puxe um produto do Bling pra montar a grade.</div>'; }
+  document.getElementById('app').innerHTML=`
+  <div class="card"><h2 style="margin:0 0 6px">Etiquetas</h2>
+   <div class="muted" style="margin-bottom:8px">Imprime 50×75mm, 2 colunas, com nome + cor/tam + código de barras Code 128 do SKU (serve no Bling e no Olist).</div>
+   <label>De um lote</label>
+   <div class="row"><select id="etqLote" style="flex:1"><option value="">— escolher lote —</option>${S.lotes.map(l=>`<option value="${l.id}">#${l.numero} · ${l.produto}${l.ref?(' ('+l.ref+')'):''}</option>`).join('')}</select><button class="btn sec mini" onclick="etqDoLote(document.getElementById('etqLote').value)">carregar</button></div>
+   <label style="margin-top:10px">Ou de um produto do Bling (referência)</label>
+   <div class="row"><input id="etqRef" placeholder="ex: C-BP-001" style="flex:1"><button class="btn sec mini" onclick="etqDoBling()">Puxar do Bling</button></div>
+  </div>
+  <div class="card">
+   <div class="grid2"><div><label>Nome no rótulo</label><input id="etqNome" value="${(E.nome||'').replace(/"/g,'&quot;')}"></div><div><label>Referência (SKU base)</label><input id="etqRefBase" value="${(E.ref||'').replace(/"/g,'&quot;')}"></div></div>
+   <div class="row" style="margin-top:10px;align-items:center;gap:8px"><label style="margin:0">Preencher todas as células com:</label><input id="etqFill" type="number" min="0" style="width:80px;padding:4px"><button class="btn sec mini" onclick="etqPreencher()">aplicar</button></div>
+   ${grade}
+   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><button class="btn" onclick="etqGerar()">🏷️ Gerar / imprimir</button></div>
+  </div>`;
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
 function mergeFaccoesDuplicadas(){
