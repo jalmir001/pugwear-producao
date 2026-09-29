@@ -178,6 +178,7 @@ export default async function handler(req, res) {
       if (!ref) return res.status(400).json({ erro: 'ref_vazia' });
       // percorre todo o catálogo (a busca do Bling por texto não devolve tudo) e filtra pelo prefixo do código
       const cores = {};
+      const codigos = {}; // cor -> tam -> código REAL do Bling (SKU exato, sem remontar)
       let nome = '', pagina = 1, continua = true, vistos = 0;
       while (continua && pagina <= 12) {
         const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
@@ -192,13 +193,15 @@ export default async function handler(req, res) {
           if (!TAMS.includes(tam) || !cor) continue;
           cores[cor] = cores[cor] || {};
           cores[cor][tam] = 0;
+          codigos[cor] = codigos[cor] || {};
+          codigos[cor][tam] = p.codigo; // código exato como está no Bling
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
           vistos++;
         }
         continua = arr.length === 100;
         pagina++;
       }
-      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, tamanhos: TAMS, variacoes: vistos });
+      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, codigos: codigos, tamanhos: TAMS, variacoes: vistos });
     }
     if (action === 'conta-pagar' && req.method === 'POST') {
       const b = req.body || {};
