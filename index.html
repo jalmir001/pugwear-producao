@@ -106,11 +106,18 @@ async function blingApi(action,params={},opts={}){
 }
 async function emitirRemessa(lid){
   const l=S.lotes.find(x=>x.id===lid); if(!l)return;
-  const cand=l.etapas.map((et,i)=>({et,i,f:S.faccoes.find(x=>x.id===et.faccaoId)})).filter(c=>c.f);
-  if(!cand.length){alert("Nenhuma etapa tem facção escolhida ainda.\n\nEscolha a facção na etapa (\"Listar facções do Bling\") antes de emitir a remessa.");return;}
-  const msg="Emitir NF de remessa para qual facção?\n\n"+cand.map((c,k)=>`${k+1}) ${c.et.nome} — ${c.f.nome} (${(Number(c.et.qtdEnv)||0)>0?c.et.qtdEnv:totLote(l)} pç)${c.f.blingId?'':' ⚠ NÃO vinculada'}`).join("\n")+"\n\nDigite o número da que quer emitir:";
+  const cand=[];
+  l.etapas.forEach((et,i)=>{
+    if(et.partes&&et.partes.length){
+      et.partes.forEach((p,pi)=>{const f=S.faccoes.find(x=>x.id===p.faccaoId);if(f)cand.push({et,i,parte:p,pi,f,qtd:totPartes(parteGrade(l,p))});});
+    }else{
+      const f=S.faccoes.find(x=>x.id===et.faccaoId);if(f)cand.push({et,i,f,qtd:(Number(et.qtdEnv)||0)>0?Number(et.qtdEnv):totLote(l)});
+    }
+  });
+  if(!cand.length){alert("Nenhuma etapa/facção definida ainda.\n\nEscolha a facção na etapa (ou divida entre facções) antes de emitir a remessa.");return;}
+  const msg="Emitir NF de remessa para qual facção?\n\n"+cand.map((c,k)=>`${k+1}) ${c.et.nome}${c.parte?' (dividida)':''} — ${c.f.nome} (${c.qtd} pç)${c.f.blingId?'':' ⚠ NÃO vinculada'}`).join("\n")+"\n\nDigite o número da que quer emitir:";
   const n=prompt(msg); if(!n)return; const k=Number(n)-1; if(!cand[k]){alert("Opção inválida.");return;}
-  const e=cand[k].et; const f=cand[k].f;
+  const c=cand[k]; const e=c.et; const f=c.f; const alvo=c.parte||c.et; const qtd=c.qtd;
   if(!f.blingId){alert(`A facção "${f.nome}" não está vinculada ao Bling.\n\nEdite a facção e use "Listar facções do Bling" pra vincular (traz o CNPJ) antes de emitir.`);return;}
   // na dúvida (facção sem IE), pergunta antes se é contribuinte
   try{
@@ -122,24 +129,23 @@ async function emitirRemessa(lid){
       // se não é contribuinte, segue — o backend emite como consumidor final
     }
   }catch(err){}
-  // já tem NF-e emitida pra essa etapa? oferece reimprimir
-  if(e.nfe&&e.nfe.link){
-    if(confirm(`Essa etapa (${e.nome}) já tem a NF-e nº ${e.nfe.numero} emitida.\n\nOK = imprimir a DANFE de novo\nCancelar = emitir uma NOVA nota`)){ window.open(e.nfe.link,"_blank"); return; }
+  // já tem NF-e emitida pra essa remessa? oferece reimprimir
+  if(alvo.nfe&&alvo.nfe.link){
+    if(confirm(`Essa remessa (${e.nome}${c.parte?' / '+f.nome:''}) já tem a NF-e nº ${alvo.nfe.numero} emitida.\n\nOK = imprimir a DANFE de novo\nCancelar = emitir uma NOVA nota`)){ window.open(alvo.nfe.link,"_blank"); return; }
   }
-  const qtd=(Number(e.qtdEnv)||0)>0?Number(e.qtdEnv):totLote(l);
   const vin=prompt("Valor por peça na NF (R$):","16,50"); if(vin===null)return;
   const valor=Number(String(vin).replace(/\./g,'').replace(',','.'))||16.50;
   if(!confirm(`Emitir e AUTORIZAR a NF de remessa na SEFAZ?\n\nFacção: ${f.nome}\nEtapa: ${e.nome}\nQtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(A nota é enviada pra SEFAZ de verdade e a DANFE abre pra imprimir.)`))return;
   toast("Emitindo e autorizando na SEFAZ…");
   try{
-    const c=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome})});
-    if(!(c.status>=200&&c.status<300&&c.data&&c.data.data&&c.data.data.id)){alert("Não consegui criar a NF-e.\n\n"+JSON.stringify(c.data&&(c.data.error||c.data)).slice(0,400));return;}
-    const nfeId=c.data.data.id, numero=c.data.data.numero||nfeId;
+    const rr=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome+(c.parte?(" / "+f.nome):"")})});
+    if(!(rr.status>=200&&rr.status<300&&rr.data&&rr.data.data&&rr.data.data.id)){alert("Não consegui criar a NF-e.\n\n"+JSON.stringify(rr.data&&(rr.data.error||rr.data)).slice(0,400));return;}
+    const nfeId=rr.data.data.id, numero=rr.data.data.numero||nfeId;
     toast("Enviando pra SEFAZ…");
     const s=await blingApi("nfe-enviar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nfeId})});
     const link=(s.data&&(s.data.linkDanfe||s.data.linkPDF))||"";
     if(link){
-      e.nfe={id:nfeId,numero,link,chave:s.data.chaveAcesso||""};
+      alvo.nfe={id:nfeId,numero,link,chave:s.data.chaveAcesso||""};
       l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`NF-e remessa nº ${numero} AUTORIZADA — ${f.nome} / ${e.nome} (${qtd} pç)`});save();
       window.open(link,"_blank");
       alert("✓ NF-e nº "+numero+" AUTORIZADA na SEFAZ!\n\nA DANFE abriu em outra aba pra imprimir. (Pra reimprimir depois, é só clicar em Emitir NF de novo nessa etapa.)");
@@ -399,6 +405,15 @@ async function imprimirDanfe(lid,i){
     else{alert("Ainda não há DANFE disponível pra essa nota (pode não estar autorizada). Situação: "+(data&&data.situacao));}
   }catch(err){ if(e.nfe.link){window.open(e.nfe.link,"_blank");} else {alert("Erro ao abrir a DANFE. Tente de novo.");} }
 }
+async function imprimirDanfeParte(lid,i,pi){
+  const l=S.lotes.find(x=>x.id===lid); if(!l)return; const p=l.etapas[i]&&l.etapas[i].partes&&l.etapas[i].partes[pi]; if(!p||!p.nfe)return;
+  toast("Abrindo DANFE…");
+  try{
+    const {data}=await blingApi("nfe-danfe",{id:p.nfe.id});
+    const link=(data&&(data.linkDanfe||data.linkPDF))||p.nfe.link;
+    if(link){window.open(link,"_blank");} else {alert("Ainda não há DANFE disponível pra essa nota. Situação: "+(data&&data.situacao));}
+  }catch(err){ if(p.nfe.link){window.open(p.nfe.link,"_blank");} else {alert("Erro ao abrir a DANFE. Tente de novo.");} }
+}
 function totPartes(grade){return Object.values(grade||{}).reduce((s,g)=>s+totGrade(g),0);}
 function parteGrade(l,p){const c0=coresDe(l);const cs=(p.cores&&p.cores.length)?p.cores:Object.keys(p.grade||{});const g={};cs.forEach(c=>{if(c0[c])g[c]=c0[c];});return g;}
 // quantidade que vale pra PAGAR: usa a retornada quando já preenchida (>0), senão a enviada
@@ -414,6 +429,7 @@ function divisaoHtml(l,e,i){
       return `<div class="card" style="background:var(--card2);margin:4px 0"><div class="between"><b>${fName(p.faccaoId)} ${concl?'<span class="pill p-ok">concluída</span>':'<span class="pill p-prod">em produção</span>'}</b><span>${q} pç · ${money(cst)}</span></div>
       <div class="muted" style="font-size:11px">${Object.keys(g).map(c=>corLabel(c)+" ("+totGrade(g[c])+")").join(", ")}</div>
       <div class="row" style="margin-top:6px;align-items:center;gap:8px"><span class="muted" style="font-size:12px">Enviado ${q}</span><label class="muted" style="font-size:12px">Retornou:</label><input type="number" style="width:90px;padding:4px 6px" value="${ret||''}" placeholder="qtd" onchange="setPartRet('${l.id}',${i},${pi},this.value)">${(ret>0&&ret<q)?`<span style="color:var(--warn);font-size:12px">perda ${q-ret}</span>`:''}</div>
+      ${p.nfe?`<div style="margin-top:4px"><button class="btn mini sec" onclick="imprimirDanfeParte('${l.id}',${i},${pi})">🖨️ DANFE nº ${p.nfe.numero}</button></div>`:''}
       <div class="between" style="margin-top:6px"><button class="btn mini sec" onclick="printRomaneioParte('${l.id}',${i},${pi})">🖨️ Romaneio</button><span>${concl?`<button class="btn mini sec" onclick="setPartStatus('${l.id}',${i},${pi},'Em produção')">↩️ reabrir</button>`:`<button class="btn mini sec" onclick="concluirParte('${l.id}',${i},${pi})">✅ Concluir</button>`} ${p.pago?`<span class="pill p-ok">pago</span> <button class="btn mini sec" onclick="estornarParte('${l.id}',${i},${pi})">↩️ estornar</button>`:`<button class="btn mini" onclick="pagarParte('${l.id}',${i},${pi})">💰 dar baixa (pago)</button>`}</span></div></div>`;}).join("");
     h+=`<div class="row" style="margin-top:4px"><button class="btn sec mini" onclick="dividirEtapa('${l.id}',${i})">✏️ Editar divisão</button><button class="btn mini red" onclick="removerDivisao('${l.id}',${i})">Remover divisão</button></div>`;
   }else{
