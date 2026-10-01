@@ -583,13 +583,13 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   'html,body{width:'+pw+'mm !important;margin:0 !important;padding:0 !important;font-family:Arial,Helvetica,sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
   '.pg{position:relative;width:'+pw+'mm;height:75mm;overflow:hidden;page-break-after:always}.pg:last-child{page-break-after:auto}'+
   '.et{position:absolute;top:0;width:50mm;height:75mm;overflow:hidden}'+
-  '.etin{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 1.5mm 2mm;display:flex;flex-direction:column}'+
+  '.etin{position:absolute;'+(rot===0?'top:0;left:0;':'top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);')+'width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 3mm 2mm;display:flex;flex-direction:column}'+
   '.logo{display:block;margin:0 auto 1.5mm;height:14mm;object-fit:contain}'+
   '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm}'+
   '.nm{font-weight:bold;font-size:9pt;line-height:1.12;margin-bottom:1mm}'+
   '.fld{font-size:8.5pt;line-height:1.35}'+
   '.preco{font-weight:bold;font-size:13pt;margin-top:1mm}'+
-  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:47mm;height:15mm}'+
+  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:44mm;height:15mm}'+
   '</style></head><body>'+pagesHtml+
   '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:15,height:95,width:2,margin:2});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
