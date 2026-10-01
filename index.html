@@ -583,13 +583,13 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   'html,body{width:'+pw+'mm !important;margin:0 !important;padding:0 !important;font-family:Arial,Helvetica,sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
   '.pg{position:relative;width:'+pw+'mm;height:75mm;overflow:hidden;page-break-after:always}.pg:last-child{page-break-after:auto}'+
   '.et{position:absolute;top:0;width:50mm;height:75mm;overflow:hidden}'+
-  '.etin{position:absolute;'+(rot===0?'top:0;left:0;':'top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);')+'width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 3mm 2mm;display:flex;flex-direction:column}'+
+  '.etin{position:absolute;'+(rot===0?'top:0;left:0;':'top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);')+'width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 1mm 2mm;display:flex;flex-direction:column}'+
   '.logo{display:block;margin:0 auto 1.5mm;height:14mm;object-fit:contain}'+
   '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm}'+
   '.nm{font-weight:bold;font-size:9pt;line-height:1.12;margin-bottom:1mm}'+
   '.fld{font-size:8.5pt;line-height:1.35}'+
   '.preco{font-weight:bold;font-size:13pt;margin-top:1mm}'+
-  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:44mm;height:15mm}'+
+  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:48mm;height:19mm}'+
   '</style></head><body>'+pagesHtml+
   '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:15,height:95,width:2,margin:2});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
@@ -643,7 +643,7 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov){
   const jsPDF=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
   const pageW=cols*50,pageH=75;
   const doc=new jsPDF({unit:'mm',format:[pageW,pageH],orientation:'portrait'});
-  function bc(sku){const c=document.createElement('canvas');try{JsBarcode(c,sku,{format:'CODE128',displayValue:true,fontSize:30,height:150,width:3,margin:0});}catch(e){}return c.toDataURL('image/png');}
+  function bc(sku){const c=document.createElement('canvas');try{JsBarcode(c,sku,{format:'CODE128',displayValue:true,fontSize:26,height:240,width:4,margin:0});}catch(e){}return c.toDataURL('image/png');}
   const nomeUP=(nome||'').toString().toUpperCase();
   let first=true;
   for(let idx=0;idx<itens.length;idx+=cols){
@@ -656,7 +656,7 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov){
       doc.setFont('helvetica','normal');doc.setFontSize(7.5);
       doc.text('COD.: '+ref,x+pad,y);y+=3.8;doc.text('COR: '+corLabel(it.cor),x+pad,y);y+=3.8;doc.text('TAM.: '+it.tam,x+pad,y);y+=4.8;
       if(it.preco>0){doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(money(it.preco),x+pad,y);}
-      try{doc.addImage(bc(it.sku),'PNG',x+1.5,pageH-18,47,15);}catch(e){}
+      try{doc.addImage(bc(it.sku),'PNG',x+1,pageH-22,48,19);}catch(e){}
     }
   }
   try{doc.autoPrint();}catch(e){}
