@@ -580,7 +580,7 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   '.wrap{width:'+(cols*50)+'mm;display:flex;flex-wrap:wrap}'+
   '.et{width:50mm;height:75mm;position:relative;overflow:hidden;page-break-inside:avoid}'+
   (cols===1?'.et{page-break-after:always}':'')+
-  '.etin{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:3mm 3mm 2mm;display:flex;flex-direction:column;box-sizing:border-box}'+
+  '.etin{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 3mm 2mm;display:flex;flex-direction:column;box-sizing:border-box}'+
   '.logo{display:block;margin:0 auto 1.5mm;height:14mm;object-fit:contain}'+
   '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm}'+
   '.nm{font-weight:bold;font-size:9pt;line-height:1.12;margin-bottom:1mm}'+
@@ -646,14 +646,14 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov){
   for(let idx=0;idx<itens.length;idx+=cols){
     if(!first)doc.addPage([pageW,pageH],'portrait');first=false;
     for(let col=0;col<cols;col++){
-      const it=itens[idx+col];if(!it)continue;const x=col*50,pad=3;
-      try{doc.addImage(PUG_LOGO,'PNG',x+(50-12)/2,3,12,14);}catch(e){}
-      let y=20;doc.setFont('helvetica','bold');doc.setFontSize(8.5);
-      const nm=doc.splitTextToSize(nomeUP,44);doc.text(nm,x+pad,y);y+=nm.length*3.8+1.5;
-      doc.setFont('helvetica','normal');doc.setFontSize(8);
-      doc.text('COD.: '+ref,x+pad,y);y+=4;doc.text('COR: '+corLabel(it.cor),x+pad,y);y+=4;doc.text('TAM.: '+it.tam,x+pad,y);y+=5;
+      const it=itens[idx+col];if(!it)continue;const x=col*50,pad=4;
+      try{doc.addImage(PUG_LOGO,'PNG',x+(50-11)/2,13,11,13);}catch(e){}
+      let y=29;doc.setFont('helvetica','bold');doc.setFontSize(8);
+      const nm=doc.splitTextToSize(nomeUP,42);doc.text(nm,x+pad,y);y+=nm.length*3.6+1.5;
+      doc.setFont('helvetica','normal');doc.setFontSize(7.5);
+      doc.text('COD.: '+ref,x+pad,y);y+=3.8;doc.text('COR: '+corLabel(it.cor),x+pad,y);y+=3.8;doc.text('TAM.: '+it.tam,x+pad,y);y+=4.8;
       if(it.preco>0){doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(money(it.preco),x+pad,y);}
-      try{doc.addImage(bc(it.sku),'PNG',x+pad,pageH-20,44,17);}catch(e){}
+      try{doc.addImage(bc(it.sku),'PNG',x+6,pageH-19,38,16);}catch(e){}
     }
   }
   try{window.open(doc.output('bloburl'),'_blank');}catch(e){doc.save('etiquetas.pdf');}
