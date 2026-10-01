@@ -586,9 +586,9 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   '.nm{font-weight:bold;font-size:9pt;line-height:1.12;margin-bottom:1mm}'+
   '.fld{font-size:8.5pt;line-height:1.35}'+
   '.preco{font-weight:bold;font-size:13pt;margin-top:1mm}'+
-  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:46mm;height:14mm}'+
+  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:44mm;height:22mm}'+
   '</style></head><body><div class="wrap">'+labels+'</div>'+
-  '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:12,height:60,margin:0});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
+  '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:15,height:95,width:2,margin:2});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
   w.document.close();
 }
