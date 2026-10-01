@@ -138,6 +138,24 @@ export default async function handler(req, res) {
     } catch (e) { return res.status(502).json({ erro: 'olist_falha', detalhe: String(e.message || e) }); }
   }
 
+  // ---- Proxy de escrita pro Olist/Tiny (POST/PUT) — token no header, não é guardado ----
+  if (action === 'olist-post') {
+    const path = (req.query.path || '').toString();
+    const otok = req.headers['x-olist-token'];
+    const metodo = (req.query.metodo || 'POST').toString().toUpperCase();
+    if (!path || !otok) return res.status(400).json({ erro: 'faltando_path_ou_token' });
+    try {
+      const r = await fetch('https://api.tiny.com.br/public-api/v3' + path, {
+        method: metodo,
+        headers: { Authorization: 'Bearer ' + otok, Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body || {})
+      });
+      const txt = await r.text();
+      let b; try { b = txt ? JSON.parse(txt) : {}; } catch (e) { b = { raw: txt.slice(0, 600) }; }
+      return res.status(r.status).json(b);
+    } catch (e) { return res.status(502).json({ erro: 'olist_falha', detalhe: String(e.message || e) }); }
+  }
+
   let token;
   try { token = await getToken(); }
   catch (e) { return res.status(500).json({ erro: 'token', detalhe: String(e.message || e), diag: e.diag || null }); }
