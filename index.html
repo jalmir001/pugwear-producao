@@ -617,6 +617,48 @@ function etqSet(cor,tam,val){const E=window._ET;if(!E)return;E.grid[cor]=E.grid[
 function etqTotal(){const E=window._ET;if(!E)return 0;return E.cores.reduce((s,cor)=>s+E.tams.reduce((a,t)=>a+(Number((E.grid[cor]||{})[t])||0),0),0);}
 function etqPreencher(){const E=window._ET;if(!E||!E.cores.length){uiAlert('Carregue um lote ou produto primeiro.');return;}const v=Number(document.getElementById('etqFill').value)||0;E.cores.forEach(cor=>{E.grid[cor]=E.grid[cor]||{};E.tams.forEach(t=>E.grid[cor][t]=v);});vEtiq();}
 function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;E.giro=Number((document.getElementById('etqGiro')||{}).value)||0;S.etqCfg={cols:E.cols,giro:E.giro};save();gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.giro);}
+function _loadScript(src){return new Promise(function(res,rej){if([].slice.call(document.scripts).some(function(s){return s.src===src;}))return res();var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+function _etItens(ref,grid,tams,codigos,precos,ov){
+  const temReais=codigos&&Object.keys(codigos).length;let itens=[],faltando=[];
+  Object.keys(grid||{}).forEach(function(cor){tams.forEach(function(tam){const q=Number((grid[cor]||{})[tam])||0;if(q<=0)return;
+    let sku=temReais&&codigos[cor]&&codigos[cor][tam];
+    if(!sku){if(temReais){faltando.push(corLabel(cor)+' '+tam);return;}sku=[ref,cor,tam].filter(Boolean).join('-');}
+    const pr=ov>0?ov:((precos&&precos[cor]&&precos[cor][tam])||0);
+    for(let k=0;k<q;k++)itens.push({cor:cor,tam:tam,sku:sku,preco:pr});});});
+  return {itens:itens,faltando:faltando,temReais:temReais};
+}
+async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov){
+  ref=(ref||'').trim();tams=tams&&tams.length?tams:TAMS;cols=(Number(cols)===1)?1:2;
+  const r=_etItens(ref,grid,tams,codigos,precos,ov);
+  if(r.temReais&&r.faltando.length){if(!await uiConfirm('Variações SEM código no Bling (ficam de fora):\n\n'+r.faltando.join(', ')+'\n\nGerar o resto?'))return;}
+  const itens=r.itens; if(!itens.length){await uiAlert('Digite ao menos 1 quantidade.');return;}
+  toast('Gerando PDF…');
+  try{
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js');
+  }catch(e){await uiAlert('Não consegui carregar o gerador de PDF (precisa de internet).');return;}
+  const jsPDF=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
+  const pageW=cols*50,pageH=75;
+  const doc=new jsPDF({unit:'mm',format:[pageW,pageH],orientation:'portrait'});
+  function bc(sku){const c=document.createElement('canvas');try{JsBarcode(c,sku,{format:'CODE128',displayValue:true,fontSize:30,height:150,width:3,margin:0});}catch(e){}return c.toDataURL('image/png');}
+  const nomeUP=(nome||'').toString().toUpperCase();
+  let first=true;
+  for(let idx=0;idx<itens.length;idx+=cols){
+    if(!first)doc.addPage([pageW,pageH],'portrait');first=false;
+    for(let col=0;col<cols;col++){
+      const it=itens[idx+col];if(!it)continue;const x=col*50,pad=3;
+      try{doc.addImage(PUG_LOGO,'PNG',x+(50-12)/2,3,12,14);}catch(e){}
+      let y=20;doc.setFont('helvetica','bold');doc.setFontSize(8.5);
+      const nm=doc.splitTextToSize(nomeUP,44);doc.text(nm,x+pad,y);y+=nm.length*3.8+1.5;
+      doc.setFont('helvetica','normal');doc.setFontSize(8);
+      doc.text('COD.: '+ref,x+pad,y);y+=4;doc.text('COR: '+corLabel(it.cor),x+pad,y);y+=4;doc.text('TAM.: '+it.tam,x+pad,y);y+=5;
+      if(it.preco>0){doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(money(it.preco),x+pad,y);}
+      try{doc.addImage(bc(it.sku),'PNG',x+pad,pageH-20,44,17);}catch(e){}
+    }
+  }
+  try{window.open(doc.output('bloburl'),'_blank');}catch(e){doc.save('etiquetas.pdf');}
+}
+function etqGerarPDF(){const E=window._ET;if(!E)return;E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;S.etqCfg={cols:E.cols,giro:E.giro||0};save();gerarEtiquetasPDF(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov);}
 function vEtiq(){
   const E=window._ET||(window._ET={ref:'',nome:'',tams:TAMS.slice(),cores:[],grid:{}});
   const cfg=S.etqCfg||{};
@@ -644,7 +686,7 @@ function vEtiq(){
    <label style="margin:0 0 0 8px">Girar:</label><select id="etqGiro" style="width:auto;padding:4px"><option value="0"${(E.giro||0)==0?' selected':''}>Normal</option><option value="90"${E.giro==90?' selected':''}>90°</option><option value="180"${E.giro==180?' selected':''}>180°</option><option value="270"${E.giro==270?' selected':''}>270°</option></select></div>
    <div class="row" style="margin-top:8px;align-items:center;gap:8px"><label style="margin:0">Preço (vazio = usa o do Bling${E.precoPadrao?': '+money(E.precoPadrao):''}):</label><input id="etqPreco" placeholder="ex: 119,90" style="width:100px;padding:4px"></div>
    ${grade}
-   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><button class="btn" onclick="etqGerar()">🏷️ Gerar / imprimir</button></div>
+   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn sec" onclick="etqGerar()">🖨️ Imprimir (HTML)</button><button class="btn" onclick="etqGerarPDF()">📄 Gerar PDF</button></span></div>
   </div>`;
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
