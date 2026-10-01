@@ -616,9 +616,12 @@ async function etqDoBling(){
 function etqSet(cor,tam,val){const E=window._ET;if(!E)return;E.grid[cor]=E.grid[cor]||{};E.grid[cor][tam]=Number(val)||0;const el=document.getElementById('etqTot');if(el)el.textContent=etqTotal();}
 function etqTotal(){const E=window._ET;if(!E)return 0;return E.cores.reduce((s,cor)=>s+E.tams.reduce((a,t)=>a+(Number((E.grid[cor]||{})[t])||0),0),0);}
 function etqPreencher(){const E=window._ET;if(!E||!E.cores.length){uiAlert('Carregue um lote ou produto primeiro.');return;}const v=Number(document.getElementById('etqFill').value)||0;E.cores.forEach(cor=>{E.grid[cor]=E.grid[cor]||{};E.tams.forEach(t=>E.grid[cor][t]=v);});vEtiq();}
-function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;E.giro=Number((document.getElementById('etqGiro')||{}).value)||0;gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.giro);}
+function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;E.giro=Number((document.getElementById('etqGiro')||{}).value)||0;S.etqCfg={cols:E.cols,giro:E.giro};save();gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.giro);}
 function vEtiq(){
   const E=window._ET||(window._ET={ref:'',nome:'',tams:TAMS.slice(),cores:[],grid:{}});
+  const cfg=S.etqCfg||{};
+  if(E.cols==null)E.cols=cfg.cols||2;
+  if(E.giro==null)E.giro=cfg.giro||0;
   let grade;
   if(E.cores.length){
     grade='<div class="gwrap"><table class="g"><thead><tr><th>Cor</th>'+E.tams.map(t=>`<th>${t}</th>`).join('')+'</tr></thead><tbody>'+
