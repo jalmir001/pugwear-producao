@@ -656,6 +656,7 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov){
       try{doc.addImage(bc(it.sku),'PNG',x+6,pageH-19,38,16);}catch(e){}
     }
   }
+  try{doc.autoPrint();}catch(e){}
   try{window.open(doc.output('bloburl'),'_blank');}catch(e){doc.save('etiquetas.pdf');}
 }
 function etqGerarPDF(){const E=window._ET;if(!E)return;E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;S.etqCfg={cols:E.cols,giro:E.giro||0};save();gerarEtiquetasPDF(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov);}
@@ -686,7 +687,7 @@ function vEtiq(){
    <label style="margin:0 0 0 8px">Girar:</label><select id="etqGiro" style="width:auto;padding:4px"><option value="0"${(E.giro||0)==0?' selected':''}>Normal</option><option value="90"${E.giro==90?' selected':''}>90°</option><option value="180"${E.giro==180?' selected':''}>180°</option><option value="270"${E.giro==270?' selected':''}>270°</option></select></div>
    <div class="row" style="margin-top:8px;align-items:center;gap:8px"><label style="margin:0">Preço (vazio = usa o do Bling${E.precoPadrao?': '+money(E.precoPadrao):''}):</label><input id="etqPreco" placeholder="ex: 119,90" style="width:100px;padding:4px"></div>
    ${grade}
-   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn sec" onclick="etqGerar()">🖨️ Imprimir (HTML)</button><button class="btn" onclick="etqGerarPDF()">📄 Gerar PDF</button></span></div>
+   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn" onclick="etqGerarPDF()">🏷️ Imprimir etiquetas</button><button class="btn sec" onclick="etqGerar()" title="Alternativo (pode sair deslocado)">HTML</button></span></div>
   </div>`;
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
