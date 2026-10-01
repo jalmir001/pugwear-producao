@@ -572,22 +572,25 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   if(itens.length>2000&&!await uiConfirm('Vão sair '+itens.length+' etiquetas. Continuar?'))return;
   const nomeUP=(nome||'').toString().toUpperCase();
   const logoTag=(typeof PUG_LOGO!=='undefined'&&PUG_LOGO)?('<img class="logo" src="'+PUG_LOGO+'">'):'<div class="logotxt">PUG WEAR</div>';
-  const labels=itens.map(it=>`<div class="et"><div class="etin">${logoTag}<div class="nm">${nomeUP}</div><div class="fld">COD.: ${ref}</div><div class="fld">COR: ${corLabel(it.cor)}</div><div class="fld">TAM.: ${it.tam}</div>${it.preco>0?`<div class="preco">${money(it.preco)}</div>`:''}<div class="bcwrap"><svg class="bc" data-sku="${it.sku}"></svg></div></div></div>`).join('');
+  const cell=it=>'<div class="etin">'+logoTag+'<div class="nm">'+nomeUP+'</div><div class="fld">COD.: '+ref+'</div><div class="fld">COR: '+corLabel(it.cor)+'</div><div class="fld">TAM.: '+it.tam+'</div>'+(it.preco>0?'<div class="preco">'+money(it.preco)+'</div>':'')+'<div class="bcwrap"><svg class="bc" data-sku="'+it.sku+'"></svg></div></div>';
+  let pagesHtml='';
+  for(let i=0;i<itens.length;i+=cols){let slots='';for(let col=0;col<cols;col++){const it=itens[i+col];if(!it)continue;slots+='<div class="et" style="left:'+(col*50)+'mm">'+cell(it)+'</div>';}pagesHtml+='<div class="pg">'+slots+'</div>';}
+  const pw=(cols*50);
   const w=window.open('','_blank');
   w.document.write('<html><head><title>Etiquetas</title><meta charset="utf-8">'+
   '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></scr'+'ipt>'+
-  '<style>@page{size:'+(cols*50)+'mm 75mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000}'+
-  '.wrap{width:'+(cols*50)+'mm;display:flex;flex-wrap:wrap}'+
-  '.et{width:50mm;height:75mm;position:relative;overflow:hidden;page-break-inside:avoid}'+
-  (cols===1?'.et{page-break-after:always}':'')+
-  '.etin{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 3mm 2mm;display:flex;flex-direction:column;box-sizing:border-box}'+
+  '<style>@page{size:'+pw+'mm 75mm;margin:0 !important}*{box-sizing:border-box}'+
+  'html,body{width:'+pw+'mm !important;margin:0 !important;padding:0 !important;font-family:Arial,Helvetica,sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+  '.pg{position:relative;width:'+pw+'mm;height:75mm;overflow:hidden;page-break-after:always}.pg:last-child{page-break-after:auto}'+
+  '.et{position:absolute;top:0;width:50mm;height:75mm;overflow:hidden}'+
+  '.etin{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 3mm 2mm;display:flex;flex-direction:column}'+
   '.logo{display:block;margin:0 auto 1.5mm;height:14mm;object-fit:contain}'+
   '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm}'+
   '.nm{font-weight:bold;font-size:9pt;line-height:1.12;margin-bottom:1mm}'+
   '.fld{font-size:8.5pt;line-height:1.35}'+
   '.preco{font-weight:bold;font-size:13pt;margin-top:1mm}'+
-  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:44mm;height:22mm}'+
-  '</style></head><body><div class="wrap">'+labels+'</div>'+
+  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:40mm;height:20mm}'+
+  '</style></head><body>'+pagesHtml+
   '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{JsBarcode(s,s.getAttribute("data-sku"),{format:"CODE128",displayValue:true,fontSize:15,height:95,width:2,margin:2});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
   w.document.close();
@@ -687,7 +690,7 @@ function vEtiq(){
    <label style="margin:0 0 0 8px">Girar:</label><select id="etqGiro" style="width:auto;padding:4px"><option value="0"${(E.giro||0)==0?' selected':''}>Normal</option><option value="90"${E.giro==90?' selected':''}>90°</option><option value="180"${E.giro==180?' selected':''}>180°</option><option value="270"${E.giro==270?' selected':''}>270°</option></select></div>
    <div class="row" style="margin-top:8px;align-items:center;gap:8px"><label style="margin:0">Preço (vazio = usa o do Bling${E.precoPadrao?': '+money(E.precoPadrao):''}):</label><input id="etqPreco" placeholder="ex: 119,90" style="width:100px;padding:4px"></div>
    ${grade}
-   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn" onclick="etqGerarPDF()">🏷️ Imprimir etiquetas</button><button class="btn sec" onclick="etqGerar()" title="Alternativo (pode sair deslocado)">HTML</button></span></div>
+   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn" onclick="etqGerar()">🏷️ Imprimir etiquetas</button><button class="btn sec" onclick="etqGerarPDF()" title="Alternativa em PDF">PDF</button></span></div>
   </div>`;
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
