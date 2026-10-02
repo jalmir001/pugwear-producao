@@ -10,6 +10,21 @@ const PORTADOR_CAIXA = 2759123137;
 const NAT_REMESSA_IND = 15111528516; // natureza "Remessa para Industrialização"
 const TAMS = ['P', 'M', 'G', 'GG', 'G1', 'G2'];
 
+// Refs cujas variações têm EAN-13 interno gerado por nós (gravado no GTIN do Bling e do Olist).
+// Pra essas, o código de barras da etiqueta é o EAN (bipa no caixa), calculado do SKU de forma
+// determinística (mesmo algoritmo usado ao cadastrar). Demais produtos continuam pelo SKU.
+const EAN_REFS = ['C-BP-002'];
+const crypto = require('crypto');
+function eanFromSku(sku) {
+  const h = crypto.createHash('sha1').update(String(sku)).digest('hex');
+  const dec = BigInt('0x' + h).toString();
+  const nine = dec.slice(-9).padStart(9, '0');
+  const base = '200' + nine;
+  let s = 0; for (let i = 0; i < 12; i++) { s += (i % 2 ? 3 : 1) * Number(base[i]); }
+  const dv = (10 - (s % 10)) % 10;
+  return base + dv;
+}
+
 const SB_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
 const SB_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim();
 
@@ -216,7 +231,7 @@ export default async function handler(req, res) {
           codigos[cor] = codigos[cor] || {};
           codigos[cor][tam] = p.codigo; // código exato como está no Bling
           gtins[cor] = gtins[cor] || {};
-          gtins[cor][tam] = (p.gtin || '').toString();
+          gtins[cor][tam] = EAN_REFS.includes(ref) ? eanFromSku(p.codigo) : (p.gtin || '').toString();
           precos[cor] = precos[cor] || {};
           precos[cor][tam] = Number(p.preco) || 0;
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
