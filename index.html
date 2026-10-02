@@ -349,7 +349,7 @@ function gradeTabela(l){const c=coresDe(l),cores=Object.keys(c);
     <tfoot><tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totLote(l)}</b></td></tr></tfoot></table></div>`;}
 function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">×</button>
     <div class="between"><h2 style="margin:0">#${l.numero} · ${l.produto}</h2>${pill(statusLote(l))}</div>
-    <div class="muted" style="margin:4px 0 8px">${l.ref?l.ref+" · ":""}${totLote(l)} peças</div>
+    <div class="muted" style="margin:4px 0 8px">${l.ref?l.ref+" · ":""}${totLote(l)} peças · Valor: <b style="color:var(--acc)">${money(custoLote(l).mo)}</b></div>
     ${gradeTabela(l)}
     <div class="row" style="margin-top:10px">
       <button class="btn sec mini" onclick="editarGrade('${l.id}')">✏️ Editar grade</button>
@@ -529,12 +529,13 @@ function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const gc={};Object.k
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
 
 // romaneio (direcionado a etapa opcional)
-function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:parteGrade(l,p),faccaoId:p.faccaoId,etapaNome:e.nome});}
+function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:parteGrade(l,p),faccaoId:p.faccaoId,etapaNome:e.nome,valor:p.valor});}
 function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
-  let c,fac,destNome;
-  if(override){c=override.cores||{};fac=override.faccaoId?S.faccoes.find(x=>x.id===override.faccaoId):null;destNome=override.etapaNome||null;}
-  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;}
+  let c,fac,destNome,valorUnit=0;
+  if(override){c=override.cores||{};fac=override.faccaoId?S.faccoes.find(x=>x.id===override.faccaoId):null;destNome=override.etapaNome||null;valorUnit=Number(override.valor)||0;}
+  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
   const cores=Object.keys(c);const totalPecas=cores.reduce((s,cor)=>s+totGrade(c[cor]),0);
+  const moLote=custoLote(l).mo;const valorTotal=valorUnit>0?valorUnit*totalPecas:moLote;const valorPP=valorUnit>0?valorUnit:(totalPecas?moLote/totalPecas:0);
   const em=S.empresa||{};
   const header=`<div class="hdr"><div class="emit"><div class="nm">${em.nome||"Empresa"}</div>${em.cnpj?`<div>CNPJ: ${em.cnpj}</div>`:""}${em.endereco?`<div class="ad">${em.endereco}</div>`:""}</div>
     <div class="dest"><div class="lb">DESTINATÁRIO / FACÇÃO</div>${fac?`<div class="nm">${fac.nome}</div>${fac.cnpj?`<div>CNPJ: ${fac.cnpj}</div>`:""}${fac.endereco?`<div class="ad">${fac.endereco}</div>`:""}${destNome?`<div class="ad">Etapa: ${destNome}</div>`:""}`:`<div class="ln"></div><div class="ln"></div>`}</div></div>`;
@@ -548,7 +549,7 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
     table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #888;padding:6px 8px;text-align:center}th{background:#eee}td:first-child,th:first-child{text-align:left}
     .sig{margin-top:46px;display:flex;gap:40px}.sig div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:12px;text-align:center}</style></head>
   <body>${header}<h1>Romaneio de Produção — Lote #${l.numero}${destNome?" · "+destNome:""}</h1>
-  <div>Produto: <b>${l.produto}</b> ${l.ref?"("+l.ref+")":""} &nbsp;·&nbsp; Data: ${new Date().toLocaleDateString("pt-BR")} &nbsp;·&nbsp; Total: <b>${totalPecas} peças</b></div>
+  <div>Produto: <b>${l.produto}</b> ${l.ref?"("+l.ref+")":""} &nbsp;·&nbsp; Data: ${new Date().toLocaleDateString("pt-BR")} &nbsp;·&nbsp; Total: <b>${totalPecas} peças</b> &nbsp;·&nbsp; Valor: <b>${money(valorTotal)}</b>${valorPP?` (${money(valorPP)}/pç)`:""}</div>
   <table><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}<th>Total</th></tr></thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>
   <div class="sig"><div>Facção / Responsável</div><div>Data de entrega</div><div>Assinatura</div></div>
   <scr`+`ipt>window.onload=function(){window.print()}<\/scr`+`ipt></body></html>`);w.document.close();}
