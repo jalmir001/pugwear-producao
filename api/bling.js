@@ -13,7 +13,7 @@ const TAMS = ['P', 'M', 'G', 'GG', 'G1', 'G2'];
 // Refs cujas variações têm EAN-13 interno gerado por nós (gravado no GTIN do Bling e do Olist).
 // Pra essas, o código de barras da etiqueta é o EAN (bipa no caixa), calculado do SKU de forma
 // determinística (mesmo algoritmo usado ao cadastrar). Demais produtos continuam pelo SKU.
-const EAN_REFS = ['C-BP-002'];
+const EAN_REFS = ['C-BP-002','C-BP-001','P-PB-001','P-PB-002','P-PUG','S-CLF-001','S-BF-001','S-BC-001','M-BP-001','M-CM-004','CM-PUGW5'];
 const crypto = require('crypto');
 function eanFromSku(sku) {
   const h = crypto.createHash('sha1').update(String(sku)).digest('hex');
