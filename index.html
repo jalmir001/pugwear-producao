@@ -585,13 +585,13 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   'html,body{width:'+pw+'mm !important;margin:0 !important;padding:0 !important;font-family:Arial,Helvetica,sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
   '.pg{position:relative;width:'+pw+'mm;height:75mm;overflow:hidden;page-break-after:always}.pg:last-child{page-break-after:auto}'+
   '.et{position:absolute;top:0;width:50mm;height:75mm;overflow:hidden}'+
-  '.etin{position:absolute;'+(rot===0?'top:0;left:0;':'top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);')+'width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:8mm 1mm 2mm;display:flex;flex-direction:column}'+
-  '.logo{display:block;margin:0 auto 1.5mm;height:14mm;object-fit:contain}'+
+  '.etin{position:absolute;'+(rot===0?'top:0;left:0;':'top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);')+'width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 5mm 2mm;display:flex;flex-direction:column}'+
+  '.logo{display:block;margin:0 auto 1.5mm;height:12mm;object-fit:contain}'+
   '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm}'+
-  '.nm{font-weight:bold;font-size:9pt;line-height:1.12;margin-bottom:1mm}'+
+  '.nm{font-weight:bold;font-size:8.5pt;line-height:1.1;margin-bottom:0.8mm}'+
   '.fld{font-size:8.5pt;line-height:1.35}'+
-  '.preco{font-weight:bold;font-size:13pt;margin-top:1mm}'+
-  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:48mm;height:27mm}'+
+  '.preco{font-weight:bold;font-size:12pt;margin-top:0.8mm}'+
+  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:40mm;height:22mm}'+
   '</style></head><body>'+pagesHtml+
   '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{var f=s.getAttribute("data-fmt")||"CODE128";JsBarcode(s,s.getAttribute("data-bc"),{format:f,displayValue:true,fontSize:15,height:95,width:(f==="EAN13"?2.2:2),margin:2});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
@@ -652,14 +652,14 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov,gtins
   for(let idx=0;idx<itens.length;idx+=cols){
     if(!first)doc.addPage([pageW,pageH],'portrait');first=false;
     for(let col=0;col<cols;col++){
-      const it=itens[idx+col];if(!it)continue;const x=col*50,pad=4;
-      try{doc.addImage(PUG_LOGO,'PNG',x+(50-11)/2,7,11,12);}catch(e){}
-      let y=22;doc.setFont('helvetica','bold');doc.setFontSize(8);
+      const it=itens[idx+col];if(!it)continue;const x=col*50,pad=5;
+      try{doc.addImage(PUG_LOGO,'PNG',x+(50-11)/2,12,11,12);}catch(e){}
+      let y=27;doc.setFont('helvetica','bold');doc.setFontSize(8);
       const nm=doc.splitTextToSize(nomeUP,42);doc.text(nm,x+pad,y);y+=nm.length*3.6+1.5;
       doc.setFont('helvetica','normal');doc.setFontSize(7.5);
       doc.text('COD.: '+ref,x+pad,y);y+=3.8;doc.text('COR: '+corLabel(it.cor),x+pad,y);y+=3.8;doc.text('TAM.: '+it.tam,x+pad,y);y+=4.8;
       if(it.preco>0){doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(money(it.preco),x+pad,y);}
-      try{doc.addImage(bc(it.bc,it.fmt),'PNG',x+1,pageH-29,48,27);}catch(e){}
+      try{doc.addImage(bc(it.bc,it.fmt),'PNG',x+5,pageH-26,40,22);}catch(e){}
     }
   }
   try{doc.autoPrint();}catch(e){}
