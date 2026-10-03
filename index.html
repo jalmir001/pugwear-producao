@@ -613,7 +613,7 @@ async function etqPullCodigos(ref){ // busca os códigos REAIS no Bling pra não
 }
 function etqAbrirDoLote(id){const l=S.lotes.find(x=>x.id===id);if(!l)return;_etLoad(l);document.querySelector('.tabbar button[data-t=etiq]').click();setTimeout(()=>etqPullCodigos(l.ref),100);}
 function etqDoLote(lid){if(!lid){return;}const l=S.lotes.find(x=>x.id===lid);_etLoad(l);vEtiq();etqPullCodigos(l.ref);}
-const PRECOS_FAM={'C-BP-001':89.90,'P-PB-001':89.90,'M-BP-001':69.90,'M-CM-004':119.90,'C-BP-002':99.90,'S-BF-001':159.90,'S-CLF-001':239.90,'B-PREMIUM':139.90,'C-TEX-PUG':99.90,'C-JM':189.90,'CM-PUG':139.90,'J-CUMFY':189.90,'M-BP-JOG-001':69.90,'C-ALF-MILAO':249.90};
+const PRECOS_FAM={'C-BP-001':89.90,'P-PB-001':99.90,'M-BP-001':79.90,'M-CM-004':119.90,'C-BP-002':99.90,'S-BF-001':159.90,'S-CLF-001':239.90,'B-PREMIUM':139.90,'C-TEX-PUG':99.90,'C-JM':219.90,'CM-PUG':139.90,'J-CUMFY':189.90,'M-BP-JOG-001':69.90,'C-ALF-MILAO':249.90};
 async function etqDoBling(){
   const ref=(document.getElementById('etqRef').value||'').trim();
   if(!ref){uiAlert('Digite a referência do produto (ex: C-BP-001).');return;}
