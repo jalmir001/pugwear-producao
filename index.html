@@ -255,8 +255,9 @@ function statusLote(l){if(l.encerrado)return"Encerrado";const st=l.etapas.map(et
 function pill(s){const m={"Aberto":"p-abe","Em produção":"p-prod","Concluído":"p-ok","Atrasado":"p-atr","Encerrado":"p-enc"};return`<span class="pill ${m[s]||'p-abe'}">${s}</span>`;}
 function fName(id){const f=S.faccoes.find(x=>x.id===id);return f?f.nome:"—";}
 
-let TAB="painel";
-document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));render();});
+let TAB=localStorage.getItem('pwtab')||"painel";
+document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;try{localStorage.setItem('pwtab',TAB);}catch(e){}document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));render();});
+document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x.dataset.t===TAB));
 function render(){({painel:vPainel,lotes:vLotes,faccoes:vFaccoes,fin:vFin,etiq:vEtiq,estoque:vEstoque}[TAB])();}
 
 // ---------- PAINEL ----------
