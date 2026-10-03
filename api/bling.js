@@ -171,6 +171,23 @@ export default async function handler(req, res) {
     } catch (e) { return res.status(502).json({ erro: 'olist_falha', detalhe: String(e.message || e) }); }
   }
 
+  // ---- Renova o token do Olist/Tiny via refresh_token (o navegador/sandbox é bloqueado; o Vercel consegue) ----
+  if (action === 'olist-refresh') {
+    const rt = req.headers['x-olist-refresh'] || (req.body && req.body.refresh_token);
+    if (!rt) return res.status(400).json({ erro: 'faltando_refresh' });
+    const cid = process.env.OLIST_CLIENT_ID || 'tiny-api-7c08bd5379d7776c3177153e925dd6a946b13ccd-1784241734';
+    const sec = process.env.OLIST_CLIENT_SECRET || 'JUnS3F1UWGEpsXJfzQwx3LM1CtPpeUvi';
+    const body = new URLSearchParams();
+    body.set('grant_type', 'refresh_token'); body.set('client_id', cid); body.set('client_secret', sec); body.set('refresh_token', rt);
+    try {
+      const r = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: body.toString()
+      });
+      const txt = await r.text(); let b; try { b = JSON.parse(txt); } catch (e) { b = { raw: txt.slice(0, 300) }; }
+      return res.status(r.status).json(b);
+    } catch (e) { return res.status(502).json({ erro: 'olist_refresh_falha', detalhe: String(e.message || e) }); }
+  }
+
   let token;
   try { token = await getToken(); }
   catch (e) { return res.status(500).json({ erro: 'token', detalhe: String(e.message || e), diag: e.diag || null }); }
