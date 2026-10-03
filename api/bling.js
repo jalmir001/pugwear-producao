@@ -13,7 +13,7 @@ const TAMS = ['P', 'M', 'G', 'GG', 'G1', 'G2'];
 // Refs cujas variações têm EAN-13 interno gerado por nós (gravado no GTIN do Bling e do Olist).
 // Pra essas, o código de barras da etiqueta é o EAN (bipa no caixa), calculado do SKU de forma
 // determinística (mesmo algoritmo usado ao cadastrar). Demais produtos continuam pelo SKU.
-const EAN_REFS = ['C-BP-002','C-BP-001','P-PB-001','P-PB-002','P-PUG','S-CLF-001','S-BF-001','S-BC-001','M-BP-001','M-CM-004','CM-PUGW5','P-TCH-Z-001','P-TCH-B-001','C-CASUAL-TCH'];
+const EAN_REFS = ['C-BP-002','C-BP-001','P-PB-001','P-PB-002','P-PUG','S-CLF-001','S-BF-001','S-BC-001','M-BP-001','M-CM-004','CM-PUGW5','P-TCH-Z-001','P-TCH-B-001','C-CASUAL-TCH','B-PREMIUM','C-TEX-PUG','C-JM','CM-PUG','J-CUMFY','M-CLC-004','C-ALF-MILAO'];
 const crypto = require('crypto');
 function eanFromSku(sku) {
   const h = crypto.createHash('sha1').update(String(sku)).digest('hex');
@@ -280,7 +280,8 @@ export default async function handler(req, res) {
           codigos[cor] = codigos[cor] || {};
           codigos[cor][tam] = p.codigo; // código exato como está no Bling
           gtins[cor] = gtins[cor] || {};
-          gtins[cor][tam] = EAN_REFS.includes(ref) ? eanFromSku(p.codigo) : (p.gtin || '').toString();
+          // sempre usa o EAN-13 determinístico do código — padroniza TODOS os produtos em EAN-13
+          gtins[cor][tam] = eanFromSku(p.codigo);
           precos[cor] = precos[cor] || {};
           precos[cor][tam] = Number(p.preco) || 0;
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
