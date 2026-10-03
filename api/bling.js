@@ -260,6 +260,8 @@ export default async function handler(req, res) {
       const gtins = {};   // cor -> tam -> GTIN/EAN do Bling (pra código de barras)
       const precos = {};  // cor -> tam -> preço do Bling
       let nome = '', pagina = 1, continua = true, vistos = 0;
+      const SZALL = /^(P|M|G|GG|G1|G2|G3|3[0-9]|4[0-9]|50)$/; // letra OU numérico (36-50)
+      const tamsFound = {};
       while (continua && pagina <= 12) {
         const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
         const arr = body.data || [];
@@ -269,8 +271,10 @@ export default async function handler(req, res) {
           const resto = p.codigo.slice(ref.length + 1);
           const partes = resto.split('-');
           const tam = partes[partes.length - 1];
-          const cor = partes.slice(0, -1).join('-');
-          if (!TAMS.includes(tam) || !cor) continue;
+          let cor = partes.slice(0, -1).join('-');
+          if (!SZALL.test(tam)) continue;
+          if (!cor) cor = 'Única'; // produtos de tamanho único sem cor (ex: Calça Jeans)
+          tamsFound[tam] = true;
           cores[cor] = cores[cor] || {};
           cores[cor][tam] = 0;
           codigos[cor] = codigos[cor] || {};
@@ -289,7 +293,13 @@ export default async function handler(req, res) {
       let precoPadrao = 0; const cont = {};
       Object.values(precos).forEach(o => Object.values(o).forEach(v => { if (v > 0) { cont[v] = (cont[v] || 0) + 1; } }));
       let melhor = 0; Object.keys(cont).forEach(v => { if (cont[v] > melhor) { melhor = cont[v]; precoPadrao = Number(v); } });
-      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, codigos: codigos, gtins: gtins, precos: precos, precoPadrao: precoPadrao, tamanhos: TAMS, variacoes: vistos });
+      // monta a lista de tamanhos encontrados: letras na ordem padrão, depois numéricos crescente
+      const ordLet = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3'];
+      const found = Object.keys(tamsFound);
+      const lets = ordLet.filter(t => found.includes(t));
+      const nums = found.filter(t => /^\d+$/.test(t)).sort((a, b) => Number(a) - Number(b));
+      const tamanhos = lets.concat(nums).length ? lets.concat(nums) : TAMS;
+      return res.status(200).json({ ref, produto: nome, cores: Object.keys(cores), gradeVazia: cores, codigos: codigos, gtins: gtins, precos: precos, precoPadrao: precoPadrao, tamanhos: tamanhos, variacoes: vistos });
     }
     if (action === 'conta-pagar' && req.method === 'POST') {
       const b = req.body || {};
