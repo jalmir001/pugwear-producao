@@ -229,7 +229,7 @@ export default async function handler(req, res) {
       const prefs = pref ? pref.split(',').map(s => s.trim()).filter(Boolean) : [];
       const out = [];
       let pagina = 1, continua = true;
-      while (continua && pagina <= 12) {
+      while (continua && pagina <= 40) {
         const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
         const arr = body.data || [];
         for (const p of arr) {
@@ -262,7 +262,7 @@ export default async function handler(req, res) {
       let nome = '', pagina = 1, continua = true, vistos = 0;
       const SZALL = /^(P|M|G|GG|G1|G2|G3|3[0-9]|4[0-9]|50)$/; // letra OU numérico (36-50)
       const tamsFound = {};
-      while (continua && pagina <= 12) {
+      while (continua && pagina <= 40) {
         const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
         const arr = body.data || [];
         for (const p of arr) {
