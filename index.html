@@ -692,6 +692,13 @@ function estBeep(ok){try{const c=new (window.AudioContext||window.webkitAudioCon
 async function estSaldoDep(id,depId){try{const {status,data}=await olistGet('/estoque/'+id);if(status>=300)return null;if(depId){const d=(data.depositos||[]).find(x=>String(x.id)===String(depId));return d?(Number(d.saldo)||0):0;}return Number(data.saldo)||0;}catch(e){return null;}}
 function estTipo(v){S.entrada=S.entrada||{linhas:[]};S.entrada.tipo=v;save();}
 function estMode(m){S.estMode=m;save();vEstoque();}
+function estRecarregar(o){if(o==='dep'){window.__estDepsTry=0;estDeps();}else{window.__estCatTry=0;estCarregarCat();}}
+function estModoCap(m){S.entrada=S.entrada||{linhas:[]};S.entrada.modo=m;save();vEstoque();if(m==='bip')estBipFocus();}
+async function estPuxarBling(){const ref=((document.getElementById('estDigRef')||{}).value||'').trim();if(!ref){uiAlert('Escreva o SKU/referência (ex: C-BP-001).');return;}toast('Puxando '+ref+' do Bling…');try{const {status,data}=await blingApi('produto',{ref});if(status!==200||!data.cores||!data.cores.length){uiAlert('Não encontrei cores pra "'+ref+'" no Bling.');return;}window.__estDig={ref:ref,nome:data.produto||ref,tams:data.tamanhos||TAMS.slice(),cores:data.cores,grid:{},codigos:data.codigos||null,gtins:data.gtins||null};vEstoque();toast(data.cores.length+' cores puxadas ✓');}catch(e){uiAlert('Erro ao puxar do Bling. Tente de novo.');}}
+function estDigSet(cor,tam,v){const D=window.__estDig;if(!D)return;D.grid[cor]=D.grid[cor]||{};D.grid[cor][tam]=Math.max(0,Number(v)||0);}
+function estDigTotal(){const D=window.__estDig;if(!D)return 0;return D.cores.reduce((s,c)=>s+D.tams.reduce((a,t)=>a+(Number((D.grid[c]||{})[t])||0),0),0);}
+function estDigPreencher(){const D=window.__estDig;if(!D)return;const v=Math.max(0,Number((document.getElementById('estDigFill')||{}).value)||0);D.cores.forEach(c=>{D.grid[c]=D.grid[c]||{};D.tams.forEach(t=>D.grid[c][t]=v);});vEstoque();}
+function estDigAdd(){const D=window.__estDig;if(!D){return;}const cat=window.__estCat;if(!cat){uiAlert('Catálogo do Olist ainda carregando. Espere o "tudo pronto ✓".');return;}S.entrada=S.entrada||{depositoId:'',depositoNome:'',tipo:'E',linhas:[]};let add=0,falta=[];D.cores.forEach(cor=>{D.tams.forEach(tam=>{const q=Number((D.grid[cor]||{})[tam])||0;if(q<=0)return;const sku=D.codigos&&D.codigos[cor]&&D.codigos[cor][tam];const gtin=D.gtins&&D.gtins[cor]&&D.gtins[cor][tam];let p=null;if(sku)p=cat.byS[sku.toUpperCase()];if(!p&&gtin)p=cat.byG[gtin];if(!p){falta.push(corLabel(cor)+' '+tam);return;}const ex=S.entrada.linhas.find(x=>x.id===p.id);if(ex){ex.qtd+=q;}else{const lin={id:p.id,sku:p.sku,desc:p.desc,preco:p.preco,qtd:q,saldo:null};S.entrada.linhas.push(lin);if(S.entrada.depositoId)estSaldoDep(p.id,S.entrada.depositoId).then(s=>{lin.saldo=s;const el=document.getElementById('sld_'+p.id);if(el)el.textContent=(s==null?'—':s);});}add+=q;});});D.grid={};window.__estDig=null;save();vEstoque();if(falta.length)uiAlert(add+' peças adicionadas.\n\nSem par no Olist (ficaram de fora): '+falta.join(', '));else toast(add+' peças adicionadas ✓');}
 function relDep(v){window.__relDep=v;const d=(window.__estDeps||[]).find(x=>String(x.id)===String(v));window.__relDepNome=d?(d.descricao||d.nome):'';}
 const _SZRE=/-(P|M|G|GG|G1|G2|3[68]|4[02468])$/;
 async function relProduto(){const term=((document.getElementById('relBusca')||{}).value||'').trim();if(!term){uiAlert('Digite nome, SKU ou EAN.');return;}if(!window.__relDep){uiAlert('Escolha a loja.');return;}if(!window.__estCat){uiAlert('Carregue o catálogo na aba Entrada primeiro.');return;}const all=Object.values(window.__estCat.byS);const tl=term.toLowerCase();const matches=all.filter(p=>p.sku.toLowerCase().includes(tl)||(p.desc||'').toLowerCase().includes(tl)||p.gtin===term).slice(0,60);if(!matches.length){uiAlert('Nada encontrado.');return;}window.__rel={rows:[],running:true,done:0,total:matches.length};vEstoque();for(const p of matches){const s=await estSaldoDep(p.id,window.__relDep);window.__rel.rows.push({sku:p.sku,desc:p.desc,saldo:s});window.__rel.done++;}window.__rel.running=false;vEstoque();}
@@ -719,13 +726,17 @@ function vEstoque(){
   }
   const mode=S.estMode||'entrada';
   const deps=window.__estDeps||[]; const cat=window.__estCat;
+  // carrega sozinho depósitos e catálogo (eles se perdem ao recarregar a página)
+  if(!window.__estDeps && window.__estDepsTry!==1){window.__estDepsTry=1;estDeps();}
+  if(!window.__estCat && window.__estCatTry!==1){window.__estCatTry=1;estCarregarCat();}
+  const carregando=(!deps.length||!cat);
   const tabs=`<div class="row" style="gap:6px;margin-bottom:10px">
     <button class="btn mini ${mode==='entrada'?'':'sec'}" onclick="estMode('entrada')">📥 Entrada / Balanço</button>
     <button class="btn mini ${mode==='relatorio'?'':'sec'}" onclick="estMode('relatorio')">📊 Relatório por loja</button></div>`;
   const setup=`<div class="card"><div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">
-     ${deps.length?'':'<button class="btn sec mini" onclick="estDeps()">carregar depósitos</button>'}
-     ${cat?`<span class="muted">catálogo: ${cat.n} itens ✓</span>`:'<button class="btn sec mini" onclick="estCarregarCat()">carregar catálogo</button>'}
-     ${deps.length&&cat?'<span class="muted">tudo pronto ✓</span>':''}
+     ${deps.length?`<span class="muted">lojas: ${deps.length} ✓</span>`:'<button class="btn sec mini" onclick="estRecarregar(\'dep\')">↻ carregar depósitos</button>'}
+     ${cat?`<span class="muted">catálogo: ${cat.n} itens ✓</span>`:'<button class="btn sec mini" onclick="estRecarregar(\'cat\')">↻ carregar catálogo</button>'}
+     ${carregando?'<span class="muted">⏳ carregando do Olist…</span>':'<span class="muted">tudo pronto ✓</span>'}
    </div></div>`;
 
   if(mode==='relatorio'){
@@ -765,10 +776,25 @@ function vEstoque(){
      <select onchange="estTipo(this.value)" style="width:auto;padding:4px"><option value="E"${(e.tipo||'E')==='E'?' selected':''}>Entrada (soma)</option><option value="B"${e.tipo==='B'?' selected':''}>Balanço (vira o saldo)</option></select>
    </div>
    ${e.tipo==='B'?'<div class="muted" style="margin-top:6px;color:#b26a00">⚠ Balanço: a quantidade bipada VIRA o saldo final (substitui o que tem). Use quando contar a loja inteira.</div>':''}
+   <div class="row" style="margin-top:8px;gap:6px">
+     <button class="btn mini ${(e.modo||'bip')==='bip'?'':'sec'}" onclick="estModoCap('bip')">📷 Por leitor (bipar)</button>
+     <button class="btn mini ${e.modo==='dig'?'':'sec'}" onclick="estModoCap('dig')">⌨️ Por digitação (grade)</button>
+   </div>
   </div>
-  <div class="card">
+  ${(e.modo==='dig')?`<div class="card">
+   <div class="muted">Escreva o SKU/referência do produto (ex: C-BP-001). Ele puxa as cores e tamanhos do Bling, você preenche a quantidade de cada um e adiciona à lista.</div>
+   <div class="row" style="margin-top:8px"><input id="estDigRef" placeholder="ex: C-BP-001" style="flex:1;padding:8px" ${cat?'':'disabled'} onkeydown="if(event.key==='Enter')estPuxarBling()"><button class="btn sec mini" onclick="estPuxarBling()">Puxar do Bling</button></div>
+   ${(window.__estDig&&window.__estDig.cores&&window.__estDig.cores.length)?(()=>{const D=window.__estDig;return `<div style="margin-top:10px"><b>${D.nome}</b></div>
+     <div class="row" style="margin:6px 0;align-items:center;gap:8px"><label style="margin:0">Preencher tudo com:</label><input id="estDigFill" type="number" min="0" style="width:70px;padding:4px"><button class="btn sec mini" onclick="estDigPreencher()">aplicar</button></div>
+     <div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${D.tams.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>
+     ${D.cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${D.tams.map(t=>`<td><input type="number" min="0" value="${(D.grid[cor]&&D.grid[cor][t])||''}" style="width:50px;padding:4px" oninput="estDigSet('${cor}','${t}',this.value)"></td>`).join('')}</tr>`).join('')}
+     </tbody></table></div>
+     <div class="between" style="margin-top:10px"><span class="muted">Na grade: <b>${estDigTotal()}</b> peças</span><button class="btn" onclick="estDigAdd()">➕ Adicionar à lista</button></div>`;})():''}
+  </div>`:`<div class="card">
    <input id="estBipInp" placeholder="Bipe o código de barras aqui…" style="width:100%;padding:8px;font-size:16px" onkeydown="estBip(event)" ${cat?'':'disabled'}>
-   <div class="between" style="margin-top:8px"><b>Total de peças: <span id="estTot">${estTotal()}</span></b><span class="muted">${e.linhas.length} itens</span></div>
+  </div>`}
+  <div class="card">
+   <div class="between"><b>Total de peças: <span id="estTot">${estTotal()}</span></b><span class="muted">${e.linhas.length} itens</span></div>
    <table style="margin-top:8px"><tr><th>SKU</th><th>Produto</th><th class="right">Saldo loja</th><th class="right">Qtd</th><th></th></tr>
    ${e.linhas.map(l=>`<tr><td>${l.sku}</td><td>${l.desc}</td><td class="right muted"><span id="sld_${l.id}">${l.saldo==null?'…':l.saldo}</span></td><td class="right"><input type="number" min="0" value="${l.qtd}" style="width:56px;padding:4px" onchange="estQtd('${l.id}',this.value)"></td><td class="right"><button class="btn mini sec" onclick="estDel('${l.id}')">x</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Nada bipado ainda.</td></tr>'}</table>
    <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap"><button class="btn sec mini" onclick="estPrint()">🖨️ Imprimir entrada (opcional)</button><button class="btn sec mini" onclick="estLimpar()">limpar</button><button class="btn" onclick="estSubir()">⬆️ Subir pro Olist</button></div>
