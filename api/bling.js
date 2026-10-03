@@ -223,6 +223,25 @@ export default async function handler(req, res) {
       const fornecedor = (c.tiposContato || []).some(t => t.id === TIPO_FORNECEDOR);
       return res.status(200).json({ id: c.id, nome: c.nome, cnpj: c.numeroDocumento || '', endereco, fornecedor, ie: c.ie || '', indicadorIe: c.indicadorIe });
     }
+    if (action === 'catalogo') {
+      // lista codigo+gtin+nome+formato de todo o catálogo, filtrando por prefixo(s) opcional(is)
+      const pref = (req.query.pref || '').toString().trim().toUpperCase();
+      const prefs = pref ? pref.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const out = [];
+      let pagina = 1, continua = true;
+      while (continua && pagina <= 12) {
+        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
+        const arr = body.data || [];
+        for (const p of arr) {
+          const cod = (p.codigo || '').toString();
+          if (prefs.length && !prefs.some(pf => cod.toUpperCase().startsWith(pf))) continue;
+          out.push({ id: p.id, codigo: cod, nome: p.nome || '', gtin: (p.gtin || '').toString(), formato: p.formato || '', preco: Number(p.preco) || 0, situacao: p.situacao || '' });
+        }
+        continua = arr.length === 100;
+        pagina++;
+      }
+      return res.status(200).json({ n: out.length, itens: out });
+    }
     if (action === 'produto') {
       const ref = (req.query.ref || '').toString().trim();
       if (!ref) return res.status(400).json({ erro: 'ref_vazia' });
