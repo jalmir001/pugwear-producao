@@ -242,6 +242,15 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({ n: out.length, itens: out });
     }
+    if (action === 'bling-raw') {
+      // proxy autenticado genérico pro Bling (criar/editar produtos, custo, etc.)
+      const path = (req.query.path || '').toString();
+      const metodo = (req.query.metodo || 'GET').toString().toUpperCase();
+      if (!path) return res.status(400).json({ erro: 'faltando_path' });
+      const opts = (metodo === 'GET') ? {} : { method: metodo, body: JSON.stringify(req.body || {}) };
+      const { status, body } = await bfetch(path, token, opts);
+      return res.status(status).json(body);
+    }
     if (action === 'produto') {
       const ref = (req.query.ref || '').toString().trim();
       if (!ref) return res.status(400).json({ erro: 'ref_vazia' });
