@@ -67,6 +67,7 @@
   <button data-t="faccoes"><span class="ic">✂</span>Facções</button>
   <button data-t="fin"><span class="ic">$</span>Financeiro</button>
   <button data-t="etiq"><span class="ic">🏷️</span>Etiquetas</button>
+  <button data-t="estoque"><span class="ic">📦</span>Estoque</button>
 </div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <div id="toast"></div>
@@ -256,7 +257,7 @@ function fName(id){const f=S.faccoes.find(x=>x.id===id);return f?f.nome:"—";}
 
 let TAB="painel";
 document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));render();});
-function render(){({painel:vPainel,lotes:vLotes,faccoes:vFaccoes,fin:vFin,etiq:vEtiq}[TAB])();}
+function render(){({painel:vPainel,lotes:vLotes,faccoes:vFaccoes,fin:vFin,etiq:vEtiq,estoque:vEstoque}[TAB])();}
 
 // ---------- PAINEL ----------
 function vPainel(){
@@ -600,7 +601,8 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   '</body></html>');
   w.document.close();
 }
-function _etLoad(l){window._ET={ref:l.ref||'',nome:l.produto||'',tams:TAMS.slice(),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l))),codigos:null};}
+function _etLoad(l){const partes=[];(l.etapas||[]).forEach(e=>{if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId)partes.push({label:fName(p.faccaoId)+' · '+e.nome,grade:parteGrade(l,p)});});}});window._ET={ref:l.ref||'',nome:l.produto||'',tams:TAMS.slice(),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l))),codigos:null,loteId:l.id,partes:partes,parteSel:''};}
+function etqSelParte(v){const E=window._ET;if(!E)return;E.parteSel=v;const l=S.lotes.find(x=>x.id===E.loteId);if(v===''||!E.partes||!E.partes[v]){const g=l?coresDe(l):{};E.grid=JSON.parse(JSON.stringify(g));E.cores=Object.keys(g);}else{const g=E.partes[v].grade||{};E.grid=JSON.parse(JSON.stringify(g));E.cores=Object.keys(g);}vEtiq();}
 async function etqPullCodigos(ref){ // busca os códigos REAIS no Bling pra não gerar SKU errado
   ref=(ref||'').trim(); if(!ref)return;
   try{const {status,data}=await blingApi('produto',{ref});
@@ -669,6 +671,61 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov,gtins
   try{window.open(doc.output('bloburl'),'_blank');}catch(e){doc.save('etiquetas.pdf');}
 }
 function etqGerarPDF(){const E=window._ET;if(!E)return;E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;S.etqCfg={cols:E.cols,giro:E.giro||0};save();gerarEtiquetasPDF(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.gtins);}
+// ---------- ENTRADA DE ESTOQUE (LOJA) ----------
+function _jwtExp(t){try{const p=JSON.parse(atob(t.split('.')[1]));return (p.exp||0)*1000;}catch(e){return 0;}}
+async function getOlistTok(){
+  const o=S.olist||{};
+  if(o.access && _jwtExp(o.access) > Date.now()+60000) return o.access;
+  if(o.refresh){
+    try{const {status,data}=await blingApi('olist-refresh',{},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:o.refresh})});
+      if(status<300 && data && data.access_token){S.olist={access:data.access_token,refresh:data.refresh_token||o.refresh,exp:_jwtExp(data.access_token)};save();return data.access_token;}}catch(e){}
+  }
+  return null;
+}
+async function olistGet(path){const t=await getOlistTok();if(!t)throw 'no_olist';return blingApi('olist-get',{path},{headers:{'x-olist-token':t}});}
+async function olistPost(path,body,metodo){const t=await getOlistTok();if(!t)throw 'no_olist';return blingApi('olist-post',{path,metodo:metodo||'POST'},{method:'POST',headers:{'x-olist-token':t,'Content-Type':'application/json'},body:JSON.stringify(body||{})});}
+function estConnect(){const raw=((document.getElementById('estTok')||{}).value||'').trim();let acc=raw,ref='';try{const j=JSON.parse(raw);acc=j.access_token||acc;ref=j.refresh_token||'';}catch(e){}if(!acc){uiAlert('Cole o conteúdo do olist_token.json (ou o access_token).');return;}S.olist={access:acc,refresh:ref,exp:_jwtExp(acc)};save();toast('Olist conectado ✓');vEstoque();}
+async function estCarregarCat(){toast('Carregando catálogo do Olist…');try{let all=[],offset=0,total=1;while(offset<total&&offset<900){const {status,data}=await olistGet('/produtos?limit=100&offset='+offset);if(status>=300){uiAlert('Erro ao carregar catálogo ('+status+'). Reconecte o Olist.');return;}const its=data.itens||[];total=(data.paginacao&&data.paginacao.total)||its.length;its.forEach(p=>all.push({id:p.id,sku:(p.sku||'').trim(),gtin:(p.gtin||'').trim(),desc:p.descricao||'',preco:(p.precos&&p.precos.precoCusto)||0}));offset+=100;if(!its.length)break;}const byG={},byS={};all.forEach(p=>{if(p.gtin)byG[p.gtin]=p;if(p.sku)byS[p.sku.toUpperCase()]=p;});window.__estCat={byG,byS,n:all.length};toast(all.length+' produtos carregados ✓');vEstoque();}catch(e){uiAlert(e==='no_olist'?'Conecte o Olist primeiro.':'Erro ao carregar catálogo.');}}
+async function estDeps(){try{const {status,data}=await olistGet('/depositos');if(status<300){window.__estDeps=data.itens||[];vEstoque();}else uiAlert('Erro ao carregar depósitos ('+status+').');}catch(e){uiAlert(e==='no_olist'?'Conecte o Olist primeiro.':'Erro ao carregar depósitos.');}}
+function estBipFocus(){setTimeout(()=>{const i=document.getElementById('estBipInp');if(i)i.focus();},60);}
+function estBip(ev){if(ev&&ev.key&&ev.key!=='Enter')return;const inp=document.getElementById('estBipInp');const code=(inp.value||'').trim();inp.value='';if(!code)return;if(!window.__estCat){uiAlert('Carregue o catálogo primeiro.');return;}const cat=window.__estCat;const p=cat.byG[code]||cat.byS[code.toUpperCase()];S.entrada=S.entrada||{depositoId:'',depositoNome:'',linhas:[]};if(!p){toast('⚠ não achei: '+code);estBipFocus();return;}const ex=S.entrada.linhas.find(x=>x.id===p.id);if(ex)ex.qtd++;else S.entrada.linhas.push({id:p.id,sku:p.sku,desc:p.desc,preco:p.preco,qtd:1});save();vEstoque();}
+function estQtd(id,v){const e=S.entrada;if(!e)return;const l=e.linhas.find(x=>x.id===id);if(l)l.qtd=Math.max(0,Number(v)||0);save();const t=document.getElementById('estTot');if(t)t.textContent=estTotal();}
+function estDel(id){const e=S.entrada;if(!e)return;e.linhas=e.linhas.filter(x=>x.id!==id);save();vEstoque();}
+function estTotal(){const e=S.entrada;if(!e)return 0;return e.linhas.reduce((s,l)=>s+(Number(l.qtd)||0),0);}
+function estDep(v){S.entrada=S.entrada||{linhas:[]};const d=(window.__estDeps||[]).find(x=>String(x.id)===String(v));S.entrada.depositoId=v;S.entrada.depositoNome=d?(d.descricao||d.nome):'';save();}
+async function estLimpar(){const e=S.entrada;if(!e||!e.linhas.length)return;if(!await uiConfirm('Limpar a lista bipada?'))return;e.linhas=[];save();vEstoque();}
+function estPrint(){const e=S.entrada;if(!e||!e.linhas.length){uiAlert('Nada pra imprimir.');return;}const rows=e.linhas.map(l=>`<tr><td>${l.sku}</td><td>${l.desc}</td><td style="text-align:center">${l.qtd}</td></tr>`).join('');const w=window.open('','_blank');w.document.write('<html><head><title>Entrada de estoque</title><style>body{font-family:Arial;padding:20px}h1{font-size:16px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #888;padding:5px 8px;font-size:12px}th{background:#eee}</style></head><body><h1>Entrada de estoque — '+(e.depositoNome||'(depósito)')+'</h1><div>Data: '+new Date().toLocaleString('pt-BR')+' · Total de peças: <b>'+estTotal()+'</b></div><table><thead><tr><th>SKU</th><th>Produto</th><th>Qtd</th></tr></thead><tbody>'+rows+'</tbody></table><div style="margin-top:40px">Conferido por: ____________________</div><scr'+'ipt>window.onload=function(){window.print()}<\/scr'+'ipt></body></html>');w.document.close();}
+async function estSubir(){const e=S.entrada;if(!e||!e.linhas.length){uiAlert('Bipe os produtos primeiro.');return;}if(!e.depositoId){uiAlert('Escolha o depósito (loja) antes de subir.');return;}if(!await uiConfirm('Dar entrada de '+estTotal()+' peças no depósito "'+e.depositoNome+'"?\n\nIsso soma ao estoque do Olist.'))return;toast('Subindo pro Olist…');let ok=0,fail=0,rest=[];for(const l of e.linhas){if(!(l.qtd>0)){continue;}try{const {status}=await olistPost('/estoque/'+l.id,{tipo:'E',quantidade:l.qtd,precoUnitario:Number(l.preco)||0.01,deposito:{id:Number(e.depositoId)},observacoes:'Entrada por bipagem'},'POST');if(status<300)ok++;else{fail++;rest.push(l);}}catch(err){fail++;rest.push(l);}await new Promise(x=>setTimeout(x,250));}if(fail===0){S.entrada={depositoId:e.depositoId,depositoNome:e.depositoNome,linhas:[]};save();uiAlert('Entrada concluída ✓\n'+ok+' itens lançados no '+e.depositoNome+'.');}else{S.entrada.linhas=rest;save();uiAlert('Lançados: '+ok+' · falharam: '+fail+'.\nOs que falharam continuam na lista pra tentar de novo.');}vEstoque();}
+function vEstoque(){
+  const e=S.entrada||(S.entrada={depositoId:'',depositoNome:'',linhas:[]});
+  const conectado=!!(S.olist&&S.olist.access&&_jwtExp(S.olist.access)>Date.now());
+  const temRefresh=!!(S.olist&&S.olist.refresh);
+  if(!conectado&&!temRefresh){
+    document.getElementById('app').innerHTML=`<div class="card"><h2 style="margin:0 0 6px">Entrada de estoque (loja)</h2>
+     <div class="muted" style="margin-bottom:6px">Cole o conteúdo do <b>olist_token.json</b> (ou só o access_token) pra conectar. Depois ele se renova sozinho (não precisa mais do .bat enquanto você usar).</div>
+     <textarea id="estTok" rows="3" style="width:100%" placeholder="cole aqui o token do Olist"></textarea>
+     <button class="btn mini" style="margin-top:6px" onclick="estConnect()">Conectar Olist</button></div>`;
+    return;
+  }
+  const deps=window.__estDeps||[]; const cat=window.__estCat;
+  document.getElementById('app').innerHTML=`
+  <div class="card"><h2 style="margin:0 0 6px">Entrada de estoque (loja)</h2>
+   <div class="muted">Bipe os produtos (o leitor funciona como teclado). Vai somando por peça. Confira, imprima se quiser, e suba pro Olist.</div>
+   <div class="row" style="margin-top:8px;align-items:center;gap:8px;flex-wrap:wrap">
+     <label style="margin:0">Depósito/loja:</label>
+     <select onchange="estDep(this.value)" style="min-width:150px"><option value="">— escolher —</option>${deps.map(d=>`<option value="${d.id}"${String(e.depositoId)===String(d.id)?' selected':''}>${d.descricao||d.nome}</option>`).join('')}</select>
+     ${deps.length?'':'<button class="btn sec mini" onclick="estDeps()">carregar depósitos</button>'}
+     ${cat?`<span class="muted">catálogo: ${cat.n} itens ✓</span>`:'<button class="btn sec mini" onclick="estCarregarCat()">carregar catálogo</button>'}
+   </div></div>
+  <div class="card">
+   <input id="estBipInp" placeholder="Bipe o código de barras aqui…" style="width:100%;padding:8px;font-size:16px" onkeydown="estBip(event)" ${cat?'':'disabled'}>
+   <div class="between" style="margin-top:8px"><b>Total de peças: <span id="estTot">${estTotal()}</span></b><span class="muted">${e.linhas.length} itens</span></div>
+   <table style="margin-top:8px"><tr><th>SKU</th><th>Produto</th><th class="right">Qtd</th><th></th></tr>
+   ${e.linhas.map(l=>`<tr><td>${l.sku}</td><td>${l.desc}</td><td class="right"><input type="number" min="0" value="${l.qtd}" style="width:56px;padding:4px" onchange="estQtd('${l.id}',this.value)"></td><td class="right"><button class="btn mini sec" onclick="estDel('${l.id}')">x</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">Nada bipado ainda.</td></tr>'}</table>
+   <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap"><button class="btn sec mini" onclick="estPrint()">🖨️ Imprimir entrada (opcional)</button><button class="btn sec mini" onclick="estLimpar()">limpar</button><button class="btn" onclick="estSubir()">⬆️ Subir pro Olist</button></div>
+  </div>`;
+  if(cat){const i=document.getElementById('estBipInp');if(i)setTimeout(()=>i.focus(),60);}
+}
 function vEtiq(){
   const E=window._ET||(window._ET={ref:'',nome:'',tams:TAMS.slice(),cores:[],grid:{}});
   const cfg=S.etqCfg||{};
@@ -685,6 +742,7 @@ function vEtiq(){
    <div class="muted" style="margin-bottom:8px">Imprime 50×75mm, 2 colunas, com nome + cor/tam + código de barras Code 128 do SKU (serve no Bling e no Olist).</div>
    <label>De um lote</label>
    <div class="row"><select id="etqLote" style="flex:1"><option value="">— escolher lote —</option>${S.lotes.map(l=>`<option value="${l.id}">#${l.numero} · ${l.produto}${l.ref?(' ('+l.ref+')'):''}</option>`).join('')}</select><button class="btn sec mini" onclick="etqDoLote(document.getElementById('etqLote').value)">carregar</button></div>
+   ${(E.partes&&E.partes.length)?`<div class="row" style="margin-top:8px;align-items:center;gap:8px"><label style="margin:0">Lote dividido — imprimir:</label><select style="flex:1" onchange="etqSelParte(this.value)"><option value=""${E.parteSel===''?' selected':''}>Lote inteiro</option>${E.partes.map((p,i)=>`<option value="${i}"${String(E.parteSel)===String(i)?' selected':''}>${p.label}</option>`).join('')}</select></div>`:''}
    <label style="margin-top:10px">Ou de um produto do Bling (referência)</label>
    <div class="row"><input id="etqRef" placeholder="ex: C-BP-001" style="flex:1"><button class="btn sec mini" onclick="etqDoBling()">Puxar do Bling</button></div>
    <div id="etqAviso" class="muted" style="margin-top:8px;font-size:12px">${E.codigos?('✓ usando os códigos reais do Bling'+(E.gtins&&Object.values(E.gtins).some(o=>Object.values(o).some(g=>/^\\d{13}$/.test(g)))?' · código de barras EAN-13 (bipa no caixa)':' · código de barras pelo SKU (produtos sem EAN)')):(E.cores.length?'⚠ ainda sem códigos reais do Bling — puxe pra garantir o código certo':'')}</div>
