@@ -613,6 +613,7 @@ async function etqPullCodigos(ref){ // busca os códigos REAIS no Bling pra não
 }
 function etqAbrirDoLote(id){const l=S.lotes.find(x=>x.id===id);if(!l)return;_etLoad(l);document.querySelector('.tabbar button[data-t=etiq]').click();setTimeout(()=>etqPullCodigos(l.ref),100);}
 function etqDoLote(lid){if(!lid){return;}const l=S.lotes.find(x=>x.id===lid);_etLoad(l);vEtiq();etqPullCodigos(l.ref);}
+const PRECOS_FAM={'C-BP-001':89.90,'P-PB-001':89.90,'M-BP-001':69.90,'M-CM-004':119.90,'C-BP-002':99.90,'S-BF-001':159.90,'S-CLF-001':239.90,'B-PREMIUM':139.90,'C-TEX-PUG':99.90,'C-JM':189.90,'CM-PUG':139.90,'J-CUMFY':189.90,'M-BP-JOG-001':69.90,'C-ALF-MILAO':249.90};
 async function etqDoBling(){
   const ref=(document.getElementById('etqRef').value||'').trim();
   if(!ref){uiAlert('Digite a referência do produto (ex: C-BP-001).');return;}
@@ -626,9 +627,10 @@ async function etqDoBling(){
     if(!all.length){uiAlert('Não achei variações de "'+ref+'" no Olist.');return;}
     const cores={},codigos={},gtins={},precos={},tamsSet={};let nome=(all[0].desc||ref).split(' - ')[0];
     all.forEach(p=>{const m=p.sku.match(SZ);if(!m)return;const tam=m[1].toUpperCase();let cor=p.sku.slice(0,m.index).slice(ref.length+1)||'Única';
-      cores[cor]=cores[cor]||{};cores[cor][tam]=0;codigos[cor]=codigos[cor]||{};codigos[cor][tam]=p.sku;gtins[cor]=gtins[cor]||{};gtins[cor][tam]=p.gtin||'';precos[cor]=precos[cor]||{};precos[cor][tam]=p.preco;tamsSet[tam]=true;});
+      cores[cor]=cores[cor]||{};cores[cor][tam]=0;codigos[cor]=codigos[cor]||{};codigos[cor][tam]=p.sku;gtins[cor]=gtins[cor]||{};gtins[cor][tam]=p.gtin||'';precos[cor]=precos[cor]||{};precos[cor][tam]=(p.preco>0?p.preco:(PRECOS_FAM[ref.toUpperCase()]||0));tamsSet[tam]=true;});
     const ordLet=['P','M','G','GG','G1','G2','G3'];const found=Object.keys(tamsSet);const lets=ordLet.filter(x=>found.includes(x));const nums=found.filter(x=>/^\d+$/.test(x)).sort((a,b)=>Number(a)-Number(b));const tams=lets.concat(nums);
     let cont={},pp=0,best=0;Object.values(precos).forEach(o=>Object.values(o).forEach(v=>{if(v>0)cont[v]=(cont[v]||0)+1;}));Object.keys(cont).forEach(v=>{if(cont[v]>best){best=cont[v];pp=Number(v);}});
+    if(!pp)pp=PRECOS_FAM[ref.toUpperCase()]||0;
     window._ET={ref,nome,tams,cores:Object.keys(cores),grid:{},codigos,gtins,precos,precoPadrao:pp};
     vEtiq();toast(Object.keys(cores).length+' cores puxadas ✓ (Olist)');
   }catch(e){uiAlert('Erro ao puxar do Olist. Tente de novo.');}
