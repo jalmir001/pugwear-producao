@@ -228,17 +228,20 @@ export default async function handler(req, res) {
       const pref = (req.query.pref || '').toString().trim().toUpperCase();
       const prefs = pref ? pref.split(',').map(s => s.trim()).filter(Boolean) : [];
       const out = [];
-      let pagina = 1, continua = true;
+      let pagina = 1, continua = true, tent = 0;
       while (continua && pagina <= 80) {
-        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&criterio=2', token);
+        const { status, body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&criterio=2', token);
+        if (status === 429 || status >= 500) { if (++tent > 6) break; await new Promise(r => setTimeout(r, 700)); continue; }
+        tent = 0;
         const arr = body.data || [];
         for (const p of arr) {
           const cod = (p.codigo || '').toString();
           if (prefs.length && !prefs.some(pf => cod.toUpperCase().startsWith(pf))) continue;
           out.push({ id: p.id, codigo: cod, nome: p.nome || '', gtin: (p.gtin || '').toString(), formato: p.formato || '', preco: Number(p.preco) || 0, situacao: p.situacao || '' });
         }
-        continua = arr.length > 0;
+        continua = arr.length === 100;
         pagina++;
+        await new Promise(r => setTimeout(r, 300));
       }
       return res.status(200).json({ n: out.length, itens: out });
     }
@@ -259,11 +262,13 @@ export default async function handler(req, res) {
       const codigos = {}; // cor -> tam -> código REAL do Bling (SKU exato, sem remontar)
       const gtins = {};   // cor -> tam -> GTIN/EAN do Bling (pra código de barras)
       const precos = {};  // cor -> tam -> preço do Bling
-      let nome = '', pagina = 1, continua = true, vistos = 0;
+      let nome = '', pagina = 1, continua = true, vistos = 0, tent = 0;
       const SZALL = /^(P|M|G|GG|G1|G2|G3|3[0-9]|4[0-9]|50)$/; // letra OU numérico (36-50)
       const tamsFound = {};
       while (continua && pagina <= 80) {
-        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&criterio=2', token);
+        const { status, body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&criterio=2', token);
+        if (status === 429 || status >= 500) { if (++tent > 6) break; await new Promise(r => setTimeout(r, 700)); continue; }
+        tent = 0;
         const arr = body.data || [];
         for (const p of arr) {
           if (!p.codigo || !p.codigo.startsWith(ref + '-')) continue;
@@ -287,8 +292,9 @@ export default async function handler(req, res) {
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
           vistos++;
         }
-        continua = arr.length > 0;
+        continua = arr.length === 100;
         pagina++;
+        await new Promise(r => setTimeout(r, 300));
       }
       // preço mais comum como padrão do produto
       let precoPadrao = 0; const cont = {};
