@@ -591,12 +591,12 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   '.pg{position:relative;width:'+pw+'mm;height:75mm;overflow:hidden;page-break-after:always}.pg:last-child{page-break-after:auto}'+
   '.et{position:absolute;top:0;width:50mm;height:75mm;overflow:hidden}'+
   '.etin{position:absolute;'+(rot===0?'top:0;left:0;':'top:50%;left:50%;transform:translate(-50%,-50%) rotate('+rot+'deg);')+'width:'+(swap?'75mm':'50mm')+';height:'+(swap?'50mm':'75mm')+';padding:13mm 5mm 2mm;display:flex;flex-direction:column}'+
-  '.logo{display:block;margin:0 auto 1.5mm;height:12mm;object-fit:contain;flex:0 0 auto}'+
-  '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm;flex:0 0 auto}'+
-  '.nm{font-weight:bold;font-size:8.5pt;line-height:1.1;margin-bottom:0.8mm;flex:0 0 auto;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-height:7.5mm}'+
-  '.fld{font-size:8.5pt;line-height:1.35;flex:0 0 auto}'+
-  '.preco{font-weight:bold;font-size:12pt;margin-top:0.8mm;flex:0 0 auto}'+
-  '.bcwrap{margin-top:auto;text-align:center;width:100%;flex:0 0 auto}.bc{width:40mm;height:22mm}'+
+  '.logo{display:block;margin:0 auto 1.5mm;height:12mm;object-fit:contain}'+
+  '.logotxt{text-align:center;font-weight:900;font-size:15pt;letter-spacing:1px;margin-bottom:1.5mm}'+
+  '.nm{font-weight:bold;font-size:8.5pt;line-height:1.1;margin-bottom:0.8mm}'+
+  '.fld{font-size:8.5pt;line-height:1.35}'+
+  '.preco{font-weight:bold;font-size:12pt;margin-top:0.8mm}'+
+  '.bcwrap{margin-top:auto;text-align:center;width:100%}.bc{width:40mm;height:22mm}'+
   '</style></head><body>'+pagesHtml+
   '<scr'+'ipt>window.onload=function(){document.querySelectorAll(".bc").forEach(function(s){try{var f=s.getAttribute("data-fmt")||"CODE128";JsBarcode(s,s.getAttribute("data-bc"),{format:f,displayValue:true,fontSize:15,height:95,width:(f==="EAN13"?2.2:2),margin:2});}catch(e){}});setTimeout(function(){window.print();},500);};</scr'+'ipt>'+
   '</body></html>');
@@ -843,7 +843,7 @@ function vEtiq(){
    <label style="margin:0 0 0 8px">Girar:</label><select id="etqGiro" style="width:auto;padding:4px"><option value="0"${(E.giro||0)==0?' selected':''}>Normal</option><option value="90"${E.giro==90?' selected':''}>90°</option><option value="180"${E.giro==180?' selected':''}>180°</option><option value="270"${E.giro==270?' selected':''}>270°</option></select></div>
    <div class="row" style="margin-top:8px;align-items:center;gap:8px"><label style="margin:0">Preço (vazio = usa o do Bling${E.precoPadrao?': '+money(E.precoPadrao):''}):</label><input id="etqPreco" placeholder="ex: 119,90" style="width:100px;padding:4px"></div>
    ${grade}
-   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn" onclick="etqGerarPDF()">🏷️ Imprimir etiquetas (PDF)</button><button class="btn sec" onclick="etqGerar()" title="Alternativa: imprimir pelo navegador">Navegador</button></span></div>
+   <div class="between" style="margin-top:12px"><span class="muted">Total de etiquetas: <b id="etqTot">${etqTotal()}</b></span><span style="display:flex;gap:8px"><button class="btn" onclick="etqGerar()">🏷️ Imprimir etiquetas</button><button class="btn sec" onclick="etqGerarPDF()" title="Alternativa em PDF">PDF</button></span></div>
   </div>`;
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="pugwear_producao_backup.json";a.click();toast("Backup exportado");}
