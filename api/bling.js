@@ -229,15 +229,15 @@ export default async function handler(req, res) {
       const prefs = pref ? pref.split(',').map(s => s.trim()).filter(Boolean) : [];
       const out = [];
       let pagina = 1, continua = true;
-      while (continua && pagina <= 40) {
-        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
+      while (continua && pagina <= 80) {
+        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&criterio=2', token);
         const arr = body.data || [];
         for (const p of arr) {
           const cod = (p.codigo || '').toString();
           if (prefs.length && !prefs.some(pf => cod.toUpperCase().startsWith(pf))) continue;
           out.push({ id: p.id, codigo: cod, nome: p.nome || '', gtin: (p.gtin || '').toString(), formato: p.formato || '', preco: Number(p.preco) || 0, situacao: p.situacao || '' });
         }
-        continua = arr.length === 100;
+        continua = arr.length > 0;
         pagina++;
       }
       return res.status(200).json({ n: out.length, itens: out });
@@ -262,8 +262,8 @@ export default async function handler(req, res) {
       let nome = '', pagina = 1, continua = true, vistos = 0;
       const SZALL = /^(P|M|G|GG|G1|G2|G3|3[0-9]|4[0-9]|50)$/; // letra OU numérico (36-50)
       const tamsFound = {};
-      while (continua && pagina <= 40) {
-        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina, token);
+      while (continua && pagina <= 80) {
+        const { body } = await bfetch('/produtos?limite=100&pagina=' + pagina + '&criterio=2', token);
         const arr = body.data || [];
         for (const p of arr) {
           if (!p.codigo || !p.codigo.startsWith(ref + '-')) continue;
@@ -287,7 +287,7 @@ export default async function handler(req, res) {
           if (!nome && p.nome) nome = p.nome.split(' - ')[0];
           vistos++;
         }
-        continua = arr.length === 100;
+        continua = arr.length > 0;
         pagina++;
       }
       // preço mais comum como padrão do produto
