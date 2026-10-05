@@ -653,12 +653,13 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov,gtins
   }catch(e){await uiAlert('Não consegui carregar o gerador de PDF (precisa de internet).');return;}
   const jsPDF=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
   const pageW=cols*50,pageH=75;
-  const doc=new jsPDF({unit:'mm',format:[pageW,pageH],orientation:'portrait'});
+  const _ori=(pageW>pageH?'landscape':'portrait');
+  const doc=new jsPDF({unit:'mm',format:[pageW,pageH],orientation:_ori});
   function bc(val,fmt){const c=document.createElement('canvas');try{JsBarcode(c,val,{format:fmt||'CODE128',displayValue:true,fontSize:26,height:240,width:4,margin:0});}catch(e){}return c.toDataURL('image/png');}
   const nomeUP=(nome||'').toString().toUpperCase();
   let first=true;
   for(let idx=0;idx<itens.length;idx+=cols){
-    if(!first)doc.addPage([pageW,pageH],'portrait');first=false;
+    if(!first)doc.addPage([pageW,pageH],_ori);first=false;
     for(let col=0;col<cols;col++){
       const it=itens[idx+col];if(!it)continue;const x=col*50,pad=5;
       try{doc.addImage(PUG_LOGO,'PNG',x+(50-11)/2,12,11,12);}catch(e){}
