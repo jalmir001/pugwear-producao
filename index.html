@@ -83,6 +83,8 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const hoje=()=>new Date().toISOString().slice(0,10);
 const dataBR=iso=>{if(!iso)return"—";const p=(iso+"").slice(0,10).split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:iso;};
 const fimMesAnterior=()=>{const d=new Date();const x=new Date(d.getFullYear(),d.getMonth(),0);return x.toISOString().slice(0,10);};
+const fimMesAtual=()=>{const d=new Date();const x=new Date(d.getFullYear(),d.getMonth()+1,0);return x.toISOString().slice(0,10);};
+const inicioMesAtual=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10);};
 const corLabel=c=>CORNOME[c]||c;
 const fdate=d=>d?d.split("-").reverse().join("/"):"—";
 
@@ -393,6 +395,7 @@ function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.
       <div><label>Qtd retornada</label><input type="number" value="${e.qtdRet}" onchange="setEt('${l.id}',${i},'qtdRet',this.value)"></div>
       <div><label>Data envio</label><input type="date" value="${e.dtEnv}" onchange="setEt('${l.id}',${i},'dtEnv',this.value)"></div>
       <div><label>Previsão (retorno)</label><input type="date" value="${e.dtPrev||''}" onchange="setEt('${l.id}',${i},'dtPrev',this.value)"></div>
+      <div><label>📅 Data retorno (fecha facção)</label><input type="date" value="${e.dtRet||''}" onchange="setEt('${l.id}',${i},'dtRet',this.value)"></div>
     </div>
     <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b> <span style="font-size:11px">(${qEtapa(e)} pç${Number(e.qtdRet)>0?' retorn.':' env.'})</span>${(Number(e.qtdRet)>0&&Number(e.qtdEnv)>Number(e.qtdRet))?` · <b style="color:var(--warn)">perda ${Number(e.qtdEnv)-Number(e.qtdRet)} pç</b>`:''}${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}${e.pago?' · <span class="pill p-ok">pago</span>':''}</span>
       <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -433,6 +436,7 @@ function divisaoHtml(l,e,i){
       return `<div class="card" style="background:var(--card2);margin:4px 0"><div class="between"><b>${fName(p.faccaoId)} ${concl?'<span class="pill p-ok">concluída</span>':'<span class="pill p-prod">em produção</span>'}</b><span>${q} pç · ${money(cst)}</span></div>
       <div class="muted" style="font-size:11px">${Object.keys(g).map(c=>corLabel(c)+" ("+totGrade(g[c])+")").join(", ")}</div>
       <div class="row" style="margin-top:6px;align-items:center;gap:8px"><span class="muted" style="font-size:12px">Enviado ${q}</span><label class="muted" style="font-size:12px">Retornou:</label><input type="number" style="width:90px;padding:4px 6px" value="${ret||''}" placeholder="qtd" onchange="setPartRet('${l.id}',${i},${pi},this.value)">${(ret>0&&ret<q)?`<span style="color:var(--warn);font-size:12px">perda ${q-ret}</span>`:''}</div>
+      <div class="row" style="margin-top:6px;align-items:center;gap:8px"><label class="muted" style="font-size:12px">📅 Data retorno (fecha facção):</label><input type="date" style="padding:4px 6px" value="${p.dtRet||''}" onchange="setPartDtRet('${l.id}',${i},${pi},this.value)"></div>
       ${p.nfe?`<div style="margin-top:4px"><button class="btn mini sec" onclick="imprimirDanfeParte('${l.id}',${i},${pi})">🖨️ DANFE nº ${p.nfe.numero}</button></div>`:''}
       <div class="between" style="margin-top:6px"><button class="btn mini sec" onclick="printRomaneioParte('${l.id}',${i},${pi})">🖨️ Romaneio</button><span>${concl?`<button class="btn mini sec" onclick="setPartStatus('${l.id}',${i},${pi},'Em produção')">↩️ reabrir</button>`:`<button class="btn mini sec" onclick="concluirParte('${l.id}',${i},${pi})">✅ Concluir</button>`} ${p.pago?`<span class="pill p-ok">pago</span> <button class="btn mini sec" onclick="estornarParte('${l.id}',${i},${pi})">↩️ estornar</button>`:`<button class="btn mini" onclick="pagarParte('${l.id}',${i},${pi})">💰 dar baixa (pago)</button>`}</span></div></div>`;}).join("");
     h+=`<div class="row" style="margin-top:4px"><button class="btn sec mini" onclick="dividirEtapa('${l.id}',${i})">✏️ Editar divisão</button><button class="btn mini red" onclick="removerDivisao('${l.id}',${i})">Remover divisão</button></div>`;
@@ -486,9 +490,11 @@ function pagarParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);l.etapas[i].pa
 function concluirParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];p.status="Concluído";if(!p.dtRet)p.dtRet=hoje();l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} — ${fName(p.faccaoId)} concluiu a parte`});save();refreshLote(lid);toast("Parte concluída ✓");}
 function setPartStatus(lid,i,pi,val){const l=S.lotes.find(x=>x.id===lid);l.etapas[i].partes[pi].status=val;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} — ${fName(l.etapas[i].partes[pi].faccaoId)}: ${val}`});save();refreshLote(lid);}
 function setPartRet(lid,i,pi,val){const l=S.lotes.find(x=>x.id===lid);l.etapas[i].partes[pi].qtdRet=Number(val)||0;save();refreshLote(lid);}
+function setPartDtRet(lid,i,pi,val){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];p.dtRet=val;if(val&&p.status!=="Concluído")p.status="Concluído";l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} — ${fName(p.faccaoId)}: retorno em ${val?fdate(val):'(limpo)'}`});save();refreshLote(lid);toast(val?"Retorno registrado ✓":"Data limpa");}
 async function setEt(lid,i,campo,val){if(campo==="faccaoId"&&val==="__new"){quickFaccao(lid,i);return;}const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const antes=e[campo];
   e[campo]=(["valor","qtdEnv","qtdRet"].includes(campo))?Number(val)||0:val;
   if(campo==="status"&&antes!==val){e.dtRet=val==="Concluído"&&!e.dtRet?hoje():e.dtRet;l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome}: ${val}`+(e.faccaoId?` (${fName(e.faccaoId)})`:"")});}
+  if(campo==="dtRet"){if(val){if(e.status!=="Concluído")e.status="Concluído";l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome}: retorno em ${fdate(val)}`+(e.faccaoId?` (${fName(e.faccaoId)})`:"")});}}
   if(campo==="faccaoId"){const f=S.faccoes.find(x=>x.id===val);if(f&&!e.valor)e.valor=f.valor;}
   if(campo==="qtdRet"&&antes!==e.qtdRet){const q=e.qtdRet;const prox=l.etapas[i+1];
     if(q>0&&prox&&await uiConfirm(`Aplicar ${q} peças como "Qtd enviada" da próxima etapa (${prox.nome})?`)){prox.qtdEnv=q;if(!prox.dtEnv)prox.dtEnv=hoje();if(prox.status==="Aberto")prox.status="Em produção";l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${prox.nome}: recebeu ${q} pç da ${e.nome}`});}}
@@ -956,8 +962,9 @@ function finPorFaccao(cutoff){const map={};
     add(e.faccaoId,{lote:l.numero,etapa:e.nome,q,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),dtRet:(e.dtRet||""),encerrado:enc,ref:{lid:l.id,nome:e.nome}});
   });});const arr=Object.values(map);arr.forEach(m=>m.pendente=m.aReceber);return arr;}
 function perdaGrupo(faccaoIds){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(faccaoIds.includes(e.faccaoId)&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
-function setFinData(v){S.finAteData=v||fimMesAnterior();save();vFin();}
-function vFin(){const cutoff=S.finAteData||fimMesAnterior();const dados=finPorFaccao(cutoff).sort((a,b)=>(b.fechamento||0)-(a.fechamento||0)||b.aReceber-a.aReceber);
+function setFinData(v){S.finAteData=v||fimMesAtual();save();vFin();}
+function vFin(){const cutoff=S.finAteData||fimMesAtual();const dados=finPorFaccao(cutoff).sort((a,b)=>(b.fechamento||0)-(a.fechamento||0)||b.aReceber-a.aReceber);
+  const lotesAbertosMes=S.lotes.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l)));
   const totalFechamento=dados.reduce((s,f)=>s+(f.fechamento||0),0);
   const totalEntregue=dados.reduce((s,f)=>s+f.entregue,0);
   const totalProd=dados.reduce((s,f)=>s+f.producao,0);
@@ -967,6 +974,8 @@ function vFin(){const cutoff=S.finAteData||fimMesAnterior();const dados=finPorFa
     <div class="row" style="align-items:center;gap:8px"><label style="margin:0">Entregue até:</label><input type="date" value="${cutoff}" onchange="setFinData(this.value)" style="max-width:175px"></div>
     <div class="between" style="margin-top:10px"><span><b>A pagar</b> (entregue até ${dataBR(cutoff)}):</span><b class="tot" style="color:var(--acc)">${money(totalFechamento)}</b></div>
     <div class="muted" style="margin-top:6px">Conta só etapas/partes <b>concluídas, não pagas e entregues até ${dataBR(cutoff)}</b>. Entregue no total (qualquer data): ${money(totalEntregue)} · Em produção: ${money(totalProd)} · A receber total: ${money(totalReceber)}</div></div>
+  <div class="card"><div class="between"><h2 style="margin:0">Lotes em aberto no mês</h2><b class="tot" style="color:var(--warn)">${lotesAbertosMes.length}</b></div>
+    ${lotesAbertosMes.length?lotesAbertosMes.map(l=>`<div class="between" style="padding:4px 0;border-bottom:1px solid var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><span>#${l.numero} · ${l.produto}</span>${pill(statusLote(l))}</div>`).join(""):'<div class="muted">Nenhum lote em aberto — tudo concluído/encerrado ✓</div>'}</div>
   ${dados.filter(f=>f.aReceber>0).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
     <div class="muted" style="margin:4px 0">Entregue até ${dataBR(cutoff)}: <b style="color:var(--acc)">${money(f.fechamento||0)}</b> · Entregue total: ${money(f.entregue)} · Em produção: ${money(f.producao)}</div>
     <table><tr><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Total</th><th>Situação</th><th></th></tr>
