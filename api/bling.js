@@ -188,6 +188,24 @@ export default async function handler(req, res) {
     } catch (e) { return res.status(502).json({ erro: 'olist_refresh_falha', detalhe: String(e.message || e) }); }
   }
 
+  // ---- Troca authorization_code por tokens do Olist (Vercel nao e bloqueado) ----
+  if (action === 'olist-auth') {
+    const code = (req.body && req.body.code) || req.query.code;
+    const redirect = (req.body && req.body.redirect_uri) || 'https://oauth.pstmn.io/v1/callback';
+    if (!code) return res.status(400).json({ erro: 'faltando_code' });
+    const cid = process.env.OLIST_CLIENT_ID || 'tiny-api-7c08bd5379d7776c3177153e925dd6a946b13ccd-1784241734';
+    const sec = process.env.OLIST_CLIENT_SECRET || 'JUnS3F1UWGEpsXJfzQwx3LM1CtPpeUvi';
+    const body = new URLSearchParams();
+    body.set('grant_type', 'authorization_code'); body.set('client_id', cid); body.set('client_secret', sec); body.set('code', code); body.set('redirect_uri', redirect);
+    try {
+      const r = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: body.toString()
+      });
+      const txt = await r.text(); let b; try { b = JSON.parse(txt); } catch (e) { b = { raw: txt.slice(0, 300) }; }
+      return res.status(r.status).json(b);
+    } catch (e) { return res.status(502).json({ erro: 'olist_auth_falha', detalhe: String(e.message || e) }); }
+  }
+
   let token;
   try { token = await getToken(); }
   catch (e) { return res.status(500).json({ erro: 'token', detalhe: String(e.message || e), diag: e.diag || null }); }
