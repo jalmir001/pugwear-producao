@@ -617,23 +617,14 @@ const PRECOS_FAM={'C-BP-001':89.90,'P-PB-001':99.90,'M-BP-001':79.90,'M-CM-004':
 async function etqDoBling(){
   const ref=(document.getElementById('etqRef').value||'').trim();
   if(!ref){uiAlert('Digite a referência do produto (ex: C-BP-001).');return;}
-  toast('Puxando '+ref+' do Olist…');
+  toast('Puxando '+ref+' do Bling…');
   try{
-    const t=await getOlistTok(); if(!t){uiAlert('Conecte o Olist (aba Estoque) primeiro.');return;}
-    const SZ=/-(P|M|G|GG|G1|G2|G3|3[0-9]|4[0-9]|50)$/i;
-    const pref=ref.toUpperCase()+'-';
-    let all=[],off=0,tot=1;
-    while(off<tot&&off<3000){const r=await olistGet('/produtos?limit=100&offset='+off);const its=r.data.itens||[];tot=(r.data.paginacao&&r.data.paginacao.total)||its.length;its.forEach(p=>{const sku=(p.sku||'').trim();if(sku.toUpperCase().startsWith(pref)&&SZ.test(sku))all.push({sku,gtin:(p.gtin||'').trim(),desc:p.descricao||'',preco:(p.precos&&p.precos.preco)||0});});off+=100;if(!its.length)break;}
-    if(!all.length){uiAlert('Não achei variações de "'+ref+'" no Olist.');return;}
-    const cores={},codigos={},gtins={},precos={},tamsSet={};let nome=(all[0].desc||ref).split(' - ')[0];
-    all.forEach(p=>{const m=p.sku.match(SZ);if(!m)return;const tam=m[1].toUpperCase();let cor=p.sku.slice(0,m.index).slice(ref.length+1)||'Única';
-      cores[cor]=cores[cor]||{};cores[cor][tam]=0;codigos[cor]=codigos[cor]||{};codigos[cor][tam]=p.sku;gtins[cor]=gtins[cor]||{};gtins[cor][tam]=p.gtin||'';precos[cor]=precos[cor]||{};precos[cor][tam]=(p.preco>0?p.preco:(PRECOS_FAM[ref.toUpperCase()]||0));tamsSet[tam]=true;});
-    const ordLet=['P','M','G','GG','G1','G2','G3'];const found=Object.keys(tamsSet);const lets=ordLet.filter(x=>found.includes(x));const nums=found.filter(x=>/^\d+$/.test(x)).sort((a,b)=>Number(a)-Number(b));const tams=lets.concat(nums);
-    let cont={},pp=0,best=0;Object.values(precos).forEach(o=>Object.values(o).forEach(v=>{if(v>0)cont[v]=(cont[v]||0)+1;}));Object.keys(cont).forEach(v=>{if(cont[v]>best){best=cont[v];pp=Number(v);}});
-    if(!pp)pp=PRECOS_FAM[ref.toUpperCase()]||0;
-    window._ET={ref,nome,tams,cores:Object.keys(cores),grid:{},codigos,gtins,precos,precoPadrao:pp};
-    vEtiq();toast(Object.keys(cores).length+' cores puxadas ✓ (Olist)');
-  }catch(e){uiAlert('Erro ao puxar do Olist. Tente de novo.');}
+    const {status,data}=await blingApi('produto',{ref});
+    if(status!==200||!data||!data.cores||!data.cores.length){uiAlert('Não achei variações de "'+ref+'" no Bling. Confira a referência.');return;}
+    const pp=data.precoPadrao||PRECOS_FAM[ref.toUpperCase()]||0;
+    window._ET={ref,nome:data.produto||ref,tams:(data.tamanhos&&data.tamanhos.length?data.tamanhos:TAMS),cores:data.cores,grid:{},codigos:data.codigos||{},gtins:data.gtins||{},precos:data.precos||{},precoPadrao:pp};
+    vEtiq();toast(data.cores.length+' cores puxadas ✓ (Bling)');
+  }catch(e){uiAlert('Erro ao puxar do Bling. Tente de novo.');}
 }
 function etqSet(cor,tam,val){const E=window._ET;if(!E)return;E.grid[cor]=E.grid[cor]||{};E.grid[cor][tam]=Number(val)||0;const el=document.getElementById('etqTot');if(el)el.textContent=etqTotal();}
 function etqTotal(){const E=window._ET;if(!E)return 0;return E.cores.reduce((s,cor)=>s+E.tams.reduce((a,t)=>a+(Number((E.grid[cor]||{})[t])||0),0),0);}
