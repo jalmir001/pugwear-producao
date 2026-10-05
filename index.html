@@ -963,20 +963,23 @@ function finPorFaccao(cutoff){const map={};
   });});const arr=Object.values(map);arr.forEach(m=>m.pendente=m.aReceber);return arr;}
 function perdaGrupo(faccaoIds){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{if(faccaoIds.includes(e.faccaoId)&&(Number(e.qtdRet)||0)>0){env+=Number(e.qtdEnv)||0;ret+=Number(e.qtdRet)||0;}}));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
 function setFinData(v){S.finAteData=v||fimMesAtual();save();vFin();}
+function setFinFiltro(v){S.finFiltro=v||"";save();vFin();}
 function vFin(){const cutoff=S.finAteData||fimMesAtual();const dados=finPorFaccao(cutoff).sort((a,b)=>(b.fechamento||0)-(a.fechamento||0)||b.aReceber-a.aReceber);
   const lotesAbertosMes=S.lotes.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l)));
+  const filtro=(S.finFiltro||"").toLowerCase().trim();
+  const dadosF=filtro?dados.filter(f=>(f.nome||"").toLowerCase().includes(filtro)):dados;
   const totalFechamento=dados.reduce((s,f)=>s+(f.fechamento||0),0);
   const totalEntregue=dados.reduce((s,f)=>s+f.entregue,0);
   const totalProd=dados.reduce((s,f)=>s+f.producao,0);
   const totalReceber=dados.reduce((s,f)=>s+f.aReceber,0);
   document.getElementById("app").innerHTML=`
   <div class="card"><h2 style="margin:0 0 6px">Fechamento de pagamento</h2>
-    <div class="row" style="align-items:center;gap:8px"><label style="margin:0">Entregue até:</label><input type="date" value="${cutoff}" onchange="setFinData(this.value)" style="max-width:175px"></div>
+    <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap"><label style="margin:0">Entregue até:</label><input type="date" value="${cutoff}" onchange="setFinData(this.value)" style="max-width:175px"><input list="finFacList" placeholder="🔎 Filtrar facção" value="${S.finFiltro||''}" oninput="setFinFiltro(this.value)" style="max-width:180px"><datalist id="finFacList">${dados.map(f=>`<option value="${f.nome}">`).join("")}</datalist>${filtro?`<button class="btn mini sec" onclick="setFinFiltro('')">limpar</button>`:''}</div>
     <div class="between" style="margin-top:10px"><span><b>A pagar</b> (entregue até ${dataBR(cutoff)}):</span><b class="tot" style="color:var(--acc)">${money(totalFechamento)}</b></div>
     <div class="muted" style="margin-top:6px">Conta só etapas/partes <b>concluídas, não pagas e entregues até ${dataBR(cutoff)}</b>. Entregue no total (qualquer data): ${money(totalEntregue)} · Em produção: ${money(totalProd)} · A receber total: ${money(totalReceber)}</div></div>
   <div class="card"><div class="between"><h2 style="margin:0">Lotes em aberto no mês</h2><b class="tot" style="color:var(--warn)">${lotesAbertosMes.length}</b></div>
     ${lotesAbertosMes.length?lotesAbertosMes.map(l=>`<div class="between" style="padding:4px 0;border-bottom:1px solid var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><span>#${l.numero} · ${l.produto}</span>${pill(statusLote(l))}</div>`).join(""):'<div class="muted">Nenhum lote em aberto — tudo concluído/encerrado ✓</div>'}</div>
-  ${dados.filter(f=>f.aReceber>0).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
+  ${dadosF.filter(f=>f.aReceber>0).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
     <div class="muted" style="margin:4px 0">Entregue até ${dataBR(cutoff)}: <b style="color:var(--acc)">${money(f.fechamento||0)}</b> · Entregue total: ${money(f.entregue)} · Em produção: ${money(f.producao)}</div>
     <table><tr><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Total</th><th>Situação</th><th></th></tr>
     ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${it.q}</td><td class="right">${money(it.base)}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?(it.noFechamento?'<span class="pill" style="background:var(--acc);color:#022">no fechamento</span>':'<span class="pill" style="background:#999;color:#fff">após o corte</span>'):'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
