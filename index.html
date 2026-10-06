@@ -277,7 +277,7 @@ function vPainel(){
 }
 function cardLote(l){const cores=Object.keys(coresDe(l));const et=l.etapas.find(e=>etStatus(e)==="Em produção"||etStatus(e)==="Atrasado")||l.etapas.find(e=>e.status==="Aberto");
   return `<div class="card" style="background:var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><div class="between"><b>#${l.numero} · ${l.produto}</b>${pill(statusLote(l))}</div>
-    <div class="muted">${cores.map(corLabel).join(", ")} · ${totLote(l)} pç</div><div class="muted">Agora: ${et?et.nome+(et.faccaoId?" · "+fName(et.faccaoId):""):"—"}</div></div>`;}
+    <div class="muted">${cores.map(corLabel).join(", ")} · ${totLote(l)} pç</div><div class="muted">📅 Criado em ${l.criadoEm?fdate(l.criadoEm):"—"} · Agora: ${et?et.nome+(et.faccaoId?" · "+fName(et.faccaoId):""):"—"}</div></div>`;}
 
 // ---------- LOTES (com filtro) ----------
 let _fLotes={q:"",st:""};
