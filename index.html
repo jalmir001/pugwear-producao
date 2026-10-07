@@ -244,6 +244,13 @@ function seed(){
   return {faccoes:f,lotes:[lote],seq:2,empresa:empresaPadrao()};
 }
 function coresDe(l){return l.gradeCores?l.gradeCores:{[l.cor||"—"]:(l.grade||{})};}
+function tamsDe(l){ // tamanhos REAIS do lote (número ou letra), nunca o TAMS fixo
+  if(l&&l.tams&&l.tams.length)return l.tams;
+  const c=coresDe(l);const set=new Set();Object.keys(c).forEach(cor=>Object.keys(c[cor]||{}).forEach(t=>set.add(t)));
+  const arr=[...set];if(!arr.length)return TAMS.slice();
+  const letras=TAMS.filter(t=>arr.includes(t));
+  const nums=arr.filter(t=>!TAMS.includes(t)).sort((a,b)=>(parseFloat(a)||0)-(parseFloat(b)||0));
+  return letras.concat(nums);}
 function totGrade(g){return TAMS.reduce((s,t)=>s+(Number(g[t])||0),0);}
 function totLote(l){return Object.values(coresDe(l)).reduce((s,g)=>s+totGrade(g),0);}
 function etStatus(e){
@@ -341,16 +348,17 @@ function salvarLote(){const {ref,gradeCores}=lerGradeEntrada();
   const nome=(document.getElementById("pnome").value)||ref||"Produto";const tot=Object.values(gradeCores).reduce((s,g)=>s+totGrade(g),0);
   const et=ETAPAS_OPC.filter(n=>_etSel.includes(n));
   const l={id:uid(),numero:S.seq++,ref,produto:nome,criadoEm:hoje(),foto:_fotoPend||"",obs:document.getElementById("lobs").value||"",custoMP:0,encerrado:false,gradeCores,
+    tams:(CATALOGO[ref]&&CATALOGO[ref].tams&&CATALOGO[ref].tams.length)?CATALOGO[ref].tams.slice():Object.keys((Object.values(gradeCores)[0])||{}),
     etapas:et.map((n,i)=>({nome:n,faccaoId:"",valor:0,qtdEnv:i===0?tot:0,qtdRet:0,dtEnv:i===0?hoje():"",dtRet:"",dtPrev:"",status:i===0?"Em produção":"Aberto",pago:false})),
     historico:[{q:new Date().toLocaleString("pt-BR"),t:"Lote criado ("+et.join(" → ")+")"}]};
   S.lotes.push(l);_fotoPend="";save();closeSheet();TAB="lotes";render();toast("Lote #"+l.numero+" criado");
 }
 
 // ---------- DETALHE DO LOTE ----------
-function gradeTabela(l){const c=coresDe(l),cores=Object.keys(c);
-  return `<div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}<th>Tot</th></tr></thead><tbody>
-    ${cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("")}</tbody>
-    <tfoot><tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totLote(l)}</b></td></tr></tfoot></table></div>`;}
+function gradeTabela(l){const c=coresDe(l),cores=Object.keys(c);const T=tamsDe(l);
+  return `<div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${T.map(t=>`<th>${t}</th>`).join("")}<th>Tot</th></tr></thead><tbody>
+    ${cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${T.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("")}</tbody>
+    <tfoot><tr><td>Total</td>${T.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totLote(l)}</b></td></tr></tfoot></table></div>`;}
 function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">×</button>
     <div class="between"><h2 style="margin:0">#${l.numero} · ${l.produto}</h2>${pill(statusLote(l))}</div>
     <div class="muted" style="margin:4px 0 8px">${l.ref?l.ref+" · ":""}${totLote(l)} peças · Valor: <b style="color:var(--acc)">${money(custoLote(l).mo)}</b></div>
@@ -529,20 +537,20 @@ function setLoteFlag(id,c,v){const l=S.lotes.find(x=>x.id===id);l[c]=v;l.histori
 async function addEtapa(id){const n=await uiPrompt("Nome da etapa (ex.: Estamparia, Embalagem):");if(!n)return;const l=S.lotes.find(x=>x.id===id);l.etapas.push({nome:n,faccaoId:"",valor:0,qtdEnv:0,qtdRet:0,dtEnv:"",dtRet:"",dtPrev:"",status:"Aberto",pago:false});l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Etapa adicionada: "+n});save();refreshLote(id);}
 async function rmEtapa(id,i){const l=S.lotes.find(x=>x.id===id);if(await uiConfirm("Remover etapa "+l.etapas[i].nome+"?")){l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Etapa removida: "+l.etapas[i].nome});l.etapas.splice(i,1);save();refreshLote(id);}}
 function duplicarLote(id){const o=S.lotes.find(x=>x.id===id);const tot=totLote(o);
-  const l={id:uid(),numero:S.seq++,ref:o.ref,produto:o.produto,criadoEm:hoje(),foto:"",obs:o.obs||"",custoMP:o.custoMP||0,encerrado:false,gradeCores:JSON.parse(JSON.stringify(o.gradeCores||{})),
+  const l={id:uid(),numero:S.seq++,ref:o.ref,produto:o.produto,criadoEm:hoje(),foto:"",obs:o.obs||"",custoMP:o.custoMP||0,encerrado:false,gradeCores:JSON.parse(JSON.stringify(o.gradeCores||{})),tams:(o.tams&&o.tams.length)?o.tams.slice():tamsDe(o),
     etapas:o.etapas.map((e,i)=>({nome:e.nome,faccaoId:e.faccaoId,valor:e.valor,qtdEnv:i===0?tot:0,qtdRet:0,dtEnv:i===0?hoje():"",dtRet:"",dtPrev:"",status:i===0?"Em produção":"Aberto",pago:false})),
     historico:[{q:new Date().toLocaleString("pt-BR"),t:"Duplicado do lote #"+o.numero}]};
   S.lotes.push(l);save();abrirLote(l.id);toast("Lote #"+l.numero+" duplicado");}
 async function delLote(id){if(await uiConfirm("Excluir este lote?")){S.lotes=S.lotes.filter(x=>x.id!==id);save();closeSheet();render();}}
 
 // editar grade de lote existente
-function editarGrade(id){const l=S.lotes.find(x=>x.id===id);const cores=Object.keys(coresDe(l));const c=coresDe(l);
+function editarGrade(id){const l=S.lotes.find(x=>x.id===id);const cores=Object.keys(coresDe(l));const c=coresDe(l);const T=tamsDe(l);
   openSheet(`<button class="close" onclick="abrirLote('${id}')">×</button><h2>Editar grade — #${l.numero}</h2>
-    <div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody>
-    ${cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td><input type="number" id="eg_${cor}_${t}" value="${c[cor][t]||0}"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${T.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody>
+    ${cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${T.map(t=>`<td><input type="number" id="eg_${cor}_${t}" value="${c[cor][t]||0}"></td>`).join("")}</tr>`).join("")}</tbody></table></div>
     <div class="hint" style="margin-top:10px">Editar a grade atualiza o total. Se o Corte ainda não foi concluído, a quantidade dele é reajustada.</div>
     <button class="btn" style="width:100%" onclick="salvarGrade('${id}')">Salvar grade</button>`);}
-function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const gc={};Object.keys(coresDe(l)).forEach(cor=>{const g={};let has=false;TAMS.forEach(t=>{const v=Number((document.getElementById(`eg_${cor}_${t}`)||{}).value)||0;g[t]=v;if(v>0)has=true;});if(has)gc[cor]=g;});
+function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const T=tamsDe(l);const gc={};Object.keys(coresDe(l)).forEach(cor=>{const g={};let has=false;T.forEach(t=>{const v=Number((document.getElementById(`eg_${cor}_${t}`)||{}).value)||0;g[t]=v;if(v>0)has=true;});if(has)gc[cor]=g;});
   l.gradeCores=gc;const tot=totLote(l);const corte=l.etapas.find(e=>e.nome==="Corte");if(corte&&corte.status!=="Concluído")corte.qtdEnv=tot;
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
 
@@ -618,7 +626,7 @@ async function gerarEtiquetasDeGrid(ref,nome,grid,tams,codigos,cols,precos,preco
   '</body></html>');
   w.document.close();
 }
-function _etLoad(l){const partes=[];(l.etapas||[]).forEach(e=>{if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId)partes.push({label:fName(p.faccaoId)+' · '+e.nome,grade:parteGrade(l,p)});});}});window._ET={ref:l.ref||'',nome:l.produto||'',tams:TAMS.slice(),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l))),codigos:null,loteId:l.id,partes:partes,parteSel:''};}
+function _etLoad(l){const partes=[];(l.etapas||[]).forEach(e=>{if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId)partes.push({label:fName(p.faccaoId)+' · '+e.nome,grade:parteGrade(l,p)});});}});window._ET={ref:l.ref||'',nome:l.produto||'',tams:tamsDe(l),cores:Object.keys(coresDe(l)),grid:JSON.parse(JSON.stringify(coresDe(l))),codigos:null,loteId:l.id,partes:partes,parteSel:''};}
 function etqSelParte(v){const E=window._ET;if(!E)return;E.parteSel=v;const l=S.lotes.find(x=>x.id===E.loteId);if(v===''||!E.partes||!E.partes[v]){const g=l?coresDe(l):{};E.grid=JSON.parse(JSON.stringify(g));E.cores=Object.keys(g);}else{const g=E.partes[v].grade||{};E.grid=JSON.parse(JSON.stringify(g));E.cores=Object.keys(g);}vEtiq();}
 async function etqPullCodigos(ref){ // busca os códigos REAIS no Bling pra não gerar SKU errado
   ref=(ref||'').trim(); if(!ref)return;
