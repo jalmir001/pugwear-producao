@@ -346,14 +346,23 @@ export default async function handler(req, res) {
     // ---- Lista itens de "facção" (remessa industrialização): codigo/nome contendo FAC ----
     if (action === 'fac-itens' && req.method === 'GET') {
       const found = {};
-      for (let pg = 1; pg <= 12; pg++) {
-        const r = await bfetch('/produtos?limite=100&pagina=' + pg, token);
-        const arr = ((r.body || {}).data) || [];
-        arr.forEach(p => {
-          const n = (p.nome || '').toLowerCase(), c = (p.codigo || '').toLowerCase();
-          if (/(^|[-_ ])fac([-_ ]|$)/.test(c) || /facc|facç/.test(n)) found[p.id] = { id: p.id, codigo: p.codigo, nome: p.nome, situacao: p.situacao };
-        });
-        if (arr.length < 100) break;
+      const scan = arr => arr.forEach(p => {
+        const n = (p.nome || '').toLowerCase(), c = (p.codigo || '').toLowerCase();
+        if (/(^|[-_ ])fac([-_ ]|$)/.test(c) || /facc|facç/.test(n)) found[p.id] = { id: p.id, codigo: p.codigo, nome: p.nome, situacao: p.situacao };
+      });
+      let done = false;
+      for (let base = 1; base <= 15 && !done; base += 3) { // lotes de 3 páginas em paralelo (rate-limit 3/s)
+        const pgs = [base, base + 1, base + 2];
+        const results = await Promise.all(pgs.map(pg =>
+          bfetch('/produtos?limite=100&pagina=' + pg, token)
+            .then(r => ({ pg, status: r.status, arr: ((r.body || {}).data) || [] }))
+            .catch(() => ({ pg, status: 0, arr: [] }))
+        ));
+        results.sort((a, b) => a.pg - b.pg);
+        for (const res of results) {
+          scan(res.arr);
+          if (res.status === 200 && res.arr.length < 100) done = true;
+        }
       }
       const itens = Object.values(found).filter(it => it.situacao !== 'I');
       for (const it of itens) {
