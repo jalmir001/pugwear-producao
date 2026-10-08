@@ -343,6 +343,26 @@ export default async function handler(req, res) {
       return res.status(status).json(body);
     }
     // ---- Emitir NF-e de remessa para industrialização (cria rascunho no Bling) ----
+    // ---- Lista itens de "facção" (remessa industrialização): codigo/nome contendo FAC ----
+    if (action === 'fac-itens' && req.method === 'GET') {
+      const found = {};
+      for (const q of ['faccao', 'fac']) {
+        for (let pg = 1; pg <= 3; pg++) {
+          const r = await bfetch('/produtos?pesquisa=' + encodeURIComponent(q) + '&limite=100&pagina=' + pg, token);
+          const arr = ((r.body || {}).data) || [];
+          arr.forEach(p => {
+            const n = (p.nome || '').toLowerCase(), c = (p.codigo || '').toLowerCase();
+            if (/(^|[-_ ])fac([-_ ]|$)/.test(c) || /facc|facç/.test(n)) found[p.id] = { id: p.id, codigo: p.codigo, nome: p.nome, situacao: p.situacao };
+          });
+          if (arr.length < 100) break;
+        }
+      }
+      const itens = Object.values(found).filter(it => it.situacao !== 'I');
+      for (const it of itens) {
+        try { const d = ((await bfetch('/produtos/' + it.id, token)).body || {}).data || {}; it.ncm = (d.tributacao && d.tributacao.ncm) || ''; } catch (e) { it.ncm = ''; }
+      }
+      return res.status(200).json({ itens });
+    }
     if (action === 'nfe-remessa' && req.method === 'POST') {
       const b = req.body || {};
       if (!b.idContato) return res.status(400).json({ erro: 'sem_faccao' });
@@ -380,9 +400,11 @@ export default async function handler(req, res) {
         contato: contatoNfe,
         naturezaOperacao: { id: NAT_REMESSA_IND },
         itens: [{
-          codigo: 'B-FAC', descricao: 'Basica Faccao', unidade: 'Un',
+          codigo: b.itemCodigo || 'B-FAC',
+          descricao: b.itemDescricao || 'Basica Faccao', unidade: 'Un',
           quantidade: qtd, valor: valor, tipo: 'P',
-          classificacaoFiscal: '61099000', cfop: '5901', origem: 0
+          classificacaoFiscal: (b.itemNcm ? String(b.itemNcm).replace(/\D/g, '') : '') || '61099000',
+          cfop: b.itemCfop || '5901', origem: 0
         }]
       };
       if (b.obs) payload.observacoes = b.obs;
