@@ -160,6 +160,39 @@ async function emitirRemessa(lid){
     }
   }catch(err){uiAlert("Erro ao falar com o Bling. Tente de novo.");}
 }
+function novaNFAvulsa(){
+  const fl=S.faccoes.filter(f=>f.blingId).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  if(!fl.length){uiAlert("Nenhuma facção vinculada ao Bling.\n\nVá em Facções e use \"Puxar facções do Bling\" pra vincular (traz o CNPJ) antes de emitir.");return;}
+  const h=`<div class="between"><h3 style="margin:0">🧾 NF avulsa</h3><button class="btn mini sec" onclick="closeSheet()">×</button></div>
+  <p class="muted" style="margin:6px 0">Remessa p/ industrialização de peças a mais (fora do lote). Emite e autoriza a NF-e na SEFAZ. Clicar fora não fecha — use o ×.</p>
+  <div><label>Facção</label><select id="avf"><option value="">—</option>${fl.map(f=>`<option value="${f.blingId}">${f.nome}</option>`).join("")}</select></div>
+  <div style="margin-top:8px"><label>Produto / grade (vai na descrição da nota)</label><input id="avp" placeholder="ex: Básica Preta — 3P 2M"></div>
+  <div class="row" style="gap:8px;margin-top:8px"><div style="flex:1"><label>Qtd de peças</label><input id="avq" type="number" min="1" placeholder="5"></div><div style="flex:1"><label>Valor por peça (R$)</label><input id="avv" value="16,50"></div></div>
+  <button class="btn" style="margin-top:12px;width:100%" onclick="emitirNFAvulsa()">Emitir e autorizar na SEFAZ</button>`;
+  openSheet(h,true);
+}
+async function emitirNFAvulsa(){
+  const bid=document.getElementById("avf").value;
+  const prod=(document.getElementById("avp").value||"").trim();
+  const qtd=Number(document.getElementById("avq").value)||0;
+  const valor=Number(String(document.getElementById("avv").value).replace(/\./g,'').replace(',','.'))||16.50;
+  if(!bid){uiAlert("Escolha a facção.");return;}
+  if(qtd<1){uiAlert("Informe a quantidade de peças (1 ou mais).");return;}
+  const f=S.faccoes.find(x=>String(x.blingId)===String(bid)); const nome=f?f.nome:"facção";
+  if(!await uiConfirm(`Emitir e AUTORIZAR a NF avulsa na SEFAZ?\n\nFacção: ${nome}\n${prod?("Produto: "+prod+"\n"):""}Qtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(A nota é enviada pra SEFAZ de verdade e a DANFE abre pra imprimir.)`))return;
+  toast("Emitindo e autorizando na SEFAZ…");
+  try{
+    const obs="Remessa p/ industrializacao - avulsa"+(prod?(" - "+prod):"");
+    const rr=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:bid,quantidade:qtd,valor:valor,obs})});
+    if(!(rr.status>=200&&rr.status<300&&rr.data&&rr.data.data&&rr.data.data.id)){uiAlert("Não consegui criar a NF-e.\n\n"+JSON.stringify(rr.data&&(rr.data.error||rr.data)).slice(0,400));return;}
+    const nfeId=rr.data.data.id, numero=rr.data.data.numero||nfeId;
+    toast("Enviando pra SEFAZ…");
+    const s=await blingApi("nfe-enviar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nfeId})});
+    const link=(s.data&&(s.data.linkDanfe||s.data.linkPDF))||"";
+    if(link){ window.open(link,"_blank"); closeSheet(); uiAlert("✓ NF-e avulsa nº "+numero+" AUTORIZADA na SEFAZ!\n\nA DANFE abriu em outra aba pra imprimir."); }
+    else { uiAlert("NF-e nº "+numero+" criada e enviada, mas a SEFAZ ainda não retornou a autorização (ou houve rejeição).\n\nSituação: "+(s.data&&s.data.situacao)+"\nConfira no Bling em alguns instantes."); }
+  }catch(err){uiAlert("Erro ao falar com o Bling. Tente de novo.");}
+}
 function setSB(t){const e=document.getElementById("sbst");if(e)e.textContent=t;}
 function cloudPush(){
   if(!sb)return; clearTimeout(_pushT); setSB("sincronizando…");
@@ -293,7 +326,7 @@ function vLotes(){
     if(_fLotes.st&&statusLote(l)!==_fLotes.st)return false;
     if(_fLotes.q){const q=_fLotes.q.toLowerCase();const txt=(l.produto+" "+l.ref+" "+Object.keys(coresDe(l)).map(corLabel).join(" ")+" #"+l.numero).toLowerCase();if(!txt.includes(q))return false;}
     return true;});
-  document.getElementById("app").innerHTML=`<div class="between" style="margin-bottom:10px"><h2 style="margin:0">Lotes</h2><button class="btn" onclick="novoLote()">+ Novo lote</button></div>
+  document.getElementById("app").innerHTML=`<div class="between" style="margin-bottom:10px"><h2 style="margin:0">Lotes</h2><span style="display:flex;gap:6px"><button class="btn sec" onclick="novaNFAvulsa()">🧾 NF avulsa</button><button class="btn" onclick="novoLote()">+ Novo lote</button></span></div>
     <div class="grid2" style="margin-bottom:10px"><input placeholder="Buscar produto/cor/nº" value="${_fLotes.q}" oninput="_fLotes.q=this.value;vLotes()"><select onchange="_fLotes.st=this.value;vLotes()"><option value="">Todos os status</option>${["Aberto","Em produção","Atrasado","Concluído","Encerrado"].map(s=>`<option ${_fLotes.st===s?"selected":""}>${s}</option>`).join("")}</select></div>
     ${L.map(cardLote).join("")||'<div class="muted">Nenhum lote com esse filtro.</div>'}`;}
 
@@ -304,8 +337,8 @@ function toggleEt(n){if(_etSel.includes(n))_etSel=_etSel.filter(x=>x!==n);else _
 function chipsEt(){return ETAPAS_OPC.map(n=>`<span class="chip ${_etSel.includes(n)?'on':''}" onclick="toggleEt('${n}')">${_etSel.includes(n)?'✓ ':''}${n}</span>`).join("");}
 function novoLote(){_fotoPend="";_ref="";_etSel=ETAPAS_PADRAO.slice();
   const refs=Object.keys(CATALOGO).map(r=>`<option value="${r}">`).join("");
-  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>Novo lote</h2>
-    <div class="hint">Digite a <b>referência</b> (ex.: C-BP-001) que as cores aparecem — ou preencha manual. Também dá pra mandar foto.</div>
+  openSheet(`<button class="close" onclick="fecharNovoLote()">×</button><h2>Novo lote</h2>
+    <div class="hint">Digite a <b>referência</b> (ex.: C-BP-001) que as cores aparecem — ou preencha manual. Também dá pra mandar foto. <b>Clicar fora não fecha mais</b> — use o × pra sair.</div>
     <div class="row" style="margin-bottom:10px"><button class="btn sec" style="flex:1" onclick="document.getElementById('fCam').click()">📷 Tirar foto</button><button class="btn sec" style="flex:1" onclick="document.getElementById('fImg').click()">🖼️ Adicionar imagem</button></div>
     <input id="fCam" type="file" accept="image/*" capture="environment" style="display:none" onchange="lerFoto(this)"><input id="fImg" type="file" accept="image/*" style="display:none" onchange="lerFoto(this)"><div id="fotoPrev"></div>
     <div class="grid2"><div><label>Referência</label><input id="ref" list="refs" placeholder="C-BP-001" oninput="onRef(this.value)"><datalist id="refs">${refs}</datalist></div><div><label>Nome do produto</label><input id="pnome" placeholder="(preenche sozinho)"></div></div>
@@ -313,7 +346,7 @@ function novoLote(){_fotoPend="";_ref="";_etSel=ETAPAS_PADRAO.slice();
     <div id="gradeArea" style="margin-top:12px"></div>
     <label style="margin-top:12px">Etapas do roteiro (marque as que este lote tem)</label><div id="etChips">${chipsEt()}</div>
     <label style="margin-top:10px">Observações</label><textarea id="lobs" rows="2" placeholder="Ex.: usar linha X, prazo apertado…"></textarea>
-    <button class="btn" style="width:100%;margin-top:12px" onclick="salvarLote()">Criar lote</button>`);
+    <button class="btn" style="width:100%;margin-top:12px" onclick="salvarLote()">Criar lote</button>`,true);
   onRef("");
 }
 function onRef(v){_ref=v;const cat=CATALOGO[v.trim()];const area=document.getElementById("gradeArea");
@@ -1034,9 +1067,12 @@ async function gerarContaPagar(key){
 function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;if(e.partes)e.partes.forEach(p=>p.pago=true);l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
 function baixarFaccaoEtapa(lid,nome,faccaoId){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);if(!e)return;if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId===faccaoId)p.pago=true;});}else if(e.faccaoId===faccaoId){e.pago=true;}l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} / ${fName(faccaoId)}`});save();render();toast("Baixado ✓");}
 
-function openSheet(h){document.getElementById("sheet").innerHTML=h;document.getElementById("modal").classList.add("on");}
-function closeSheet(){document.getElementById("modal").classList.remove("on");}
-document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeSheet();});
+function openSheet(h,lock){document.getElementById("sheet").innerHTML=h;document.getElementById("modal").classList.add("on");window._sheetLock=!!lock;}
+function closeSheet(){document.getElementById("modal").classList.remove("on");window._sheetLock=false;}
+function fecharNovoLote(){ // fecha a aba de novo lote só com confirmação (evita perder o que foi digitado)
+  (async()=>{ if(await uiConfirm("Fechar sem criar o lote? O que você digitou aqui será perdido.")) closeSheet(); })();
+}
+document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal"&&!window._sheetLock)closeSheet();});
 startApp();
 
 function _uiEsc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
