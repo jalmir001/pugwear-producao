@@ -346,16 +346,14 @@ export default async function handler(req, res) {
     // ---- Lista itens de "facção" (remessa industrialização): codigo/nome contendo FAC ----
     if (action === 'fac-itens' && req.method === 'GET') {
       const found = {};
-      for (const q of ['faccao', 'fac']) {
-        for (let pg = 1; pg <= 3; pg++) {
-          const r = await bfetch('/produtos?pesquisa=' + encodeURIComponent(q) + '&limite=100&pagina=' + pg, token);
-          const arr = ((r.body || {}).data) || [];
-          arr.forEach(p => {
-            const n = (p.nome || '').toLowerCase(), c = (p.codigo || '').toLowerCase();
-            if (/(^|[-_ ])fac([-_ ]|$)/.test(c) || /facc|facç/.test(n)) found[p.id] = { id: p.id, codigo: p.codigo, nome: p.nome, situacao: p.situacao };
-          });
-          if (arr.length < 100) break;
-        }
+      for (let pg = 1; pg <= 12; pg++) {
+        const r = await bfetch('/produtos?limite=100&pagina=' + pg, token);
+        const arr = ((r.body || {}).data) || [];
+        arr.forEach(p => {
+          const n = (p.nome || '').toLowerCase(), c = (p.codigo || '').toLowerCase();
+          if (/(^|[-_ ])fac([-_ ]|$)/.test(c) || /facc|facç/.test(n)) found[p.id] = { id: p.id, codigo: p.codigo, nome: p.nome, situacao: p.situacao };
+        });
+        if (arr.length < 100) break;
       }
       const itens = Object.values(found).filter(it => it.situacao !== 'I');
       for (const it of itens) {
