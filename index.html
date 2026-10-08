@@ -160,22 +160,29 @@ async function emitirRemessa(lid){
     }
   }catch(err){uiAlert("Erro ao falar com o Bling. Tente de novo.");}
 }
-let _refAV="";
+let _facItens=[];
 function avFacOptions(sel){const fl=S.faccoes.filter(f=>f.blingId).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));return `<option value="">—</option>`+fl.map(f=>`<option value="${f.blingId}" ${String(f.blingId)===String(sel||"")?"selected":""}>${f.nome}</option>`).join("");}
 function novaNFAvulsa(){
-  _refAV="";
-  const refs=Object.keys(CATALOGO).map(r=>`<option value="${r}">`).join("");
+  _facItens=[];
   const h=`<button class="close" onclick="closeSheet()">×</button><h2>🧾 NF avulsa</h2>
-  <div class="hint">Remessa p/ industrialização de peças (fora do lote). Digite a <b>referência</b> (ex.: C-BP-001), que as cores e tamanhos aparecem; preencha a grade igual ao romaneio e emita a NF-e na SEFAZ. <b>Clicar fora não fecha</b> — use o ×.</div>
-  <div><label>Facção</label><div class="row" style="gap:8px;align-items:flex-end"><select id="avf" style="flex:1">${avFacOptions("")}</select><button class="btn sec mini" type="button" onclick="puxarFaccoesAV()">📋 Puxar do Bling</button></div><div class="muted" style="font-size:11px;margin-top:4px">Digite no seletor pra pesquisar. Faltou alguma? Puxe do Bling (traz o CNPJ) ou cadastre em Facções.</div></div>
-  <div class="grid2" style="margin-top:10px"><div><label>Referência</label><input id="avref" list="refsAV" placeholder="C-BP-001" oninput="onRefAV(this.value)"><datalist id="refsAV">${refs}</datalist></div><div><label>Produto</label><input id="avnome" placeholder="(preenche sozinho)"></div></div>
-  <button class="btn sec mini" type="button" style="margin-top:8px" onclick="puxarCatalogoAV()">⬇️ Puxar cores do Bling</button>
-  <div id="avGradeArea" style="margin-top:12px"></div>
-  <div class="row" style="gap:8px;margin-top:10px;align-items:flex-end"><div style="flex:1"><label>Valor por peça (R$)</label><input id="avv" value="16,50"></div><div style="flex:1;text-align:right"><span class="muted">Total: </span><b id="avtot" style="color:var(--acc)">0 pç</b></div></div>
+  <div class="hint">Remessa p/ industrialização de peças (fora do lote). Selecione o <b>item de facção</b> (puxado do Bling — ex.: B-FAC Basica Faccao), a quantidade e o cliente/facção, e emite a NF-e na SEFAZ. A nota sai com o item selecionado. <b>Clicar fora não fecha</b> — use o ×.</div>
+  <div><label>Item de facção (produto da nota)</label><div class="row" style="gap:8px;align-items:flex-end"><select id="avprod" style="flex:1"><option value="">(carregando do Bling…)</option></select><button class="btn sec mini" type="button" onclick="puxarFacItens()">🔄 Bling</button></div></div>
+  <div style="margin-top:10px"><label>Facção (cliente / destinatário)</label><div class="row" style="gap:8px;align-items:flex-end"><select id="avf" style="flex:1">${avFacOptions("")}</select><button class="btn sec mini" type="button" onclick="puxarFaccoesAV()">📋 Bling</button></div><div class="muted" style="font-size:11px;margin-top:4px">Digite no seletor pra pesquisar. Faltou alguma? Puxe do Bling (traz o CNPJ) ou cadastre em Facções.</div></div>
+  <div class="row" style="gap:8px;margin-top:10px;align-items:flex-end"><div style="flex:1"><label>Qtd de peças</label><input id="avq" type="number" min="1" placeholder="5"></div><div style="flex:1"><label>Valor por peça (R$)</label><input id="avv" value="16,50"></div></div>
   <button class="btn" style="width:100%;margin-top:12px" onclick="emitirNFAvulsa()">Emitir e autorizar na SEFAZ</button>`;
   openSheet(h,true);
-  onRefAV("");
+  carregarFacItens();
 }
+async function carregarFacItens(){
+  const sel=document.getElementById("avprod"); if(!sel)return;
+  try{const {status,data}=await blingApi("fac-itens",{});
+    const its=(data&&data.itens)||[];
+    _facItens=its;
+    if(!its.length){sel.innerHTML=`<option value="">(nenhum item de facção no Bling)</option>`;return;}
+    sel.innerHTML=its.map((it,k)=>`<option value="${k}">${it.codigo} — ${it.nome}</option>`).join("");
+  }catch(e){sel.innerHTML=`<option value="">(erro ao puxar do Bling)</option>`;}
+}
+async function puxarFacItens(){const sel=document.getElementById("avprod");if(sel)sel.innerHTML=`<option value="">(carregando do Bling…)</option>`;toast("Puxando itens de facção do Bling…");await carregarFacItens();toast(_facItens.length?(_facItens.length+" item(ns) de facção ✓"):"Nenhum item de facção encontrado");}
 async function puxarFaccoesAV(){
   const sel=document.getElementById("avf"); const cur=sel?sel.value:"";
   toast("Puxando facções do Bling…");
@@ -185,42 +192,21 @@ async function puxarFaccoesAV(){
     toast(r.add?("+"+r.add+" facções carregadas ✓"):"Facções já estavam na lista");
   }catch(e){toast("Erro ao puxar do Bling");}
 }
-function onRefAV(v){_refAV=v;const cat=CATALOGO[(v||"").trim()];const area=document.getElementById("avGradeArea");if(!area)return;
-  if(cat){const nm=document.getElementById("avnome");if(nm)nm.value=cat.nome;
-    area.innerHTML=`<label>Grade por cor — <b>${v.trim()}</b> (digite a qtd por tamanho)</label><div class="gwrap"><table class="g"><thead><tr><th>Cor</th>${cat.tams.map(t=>`<th>${t}</th>`).join("")}</tr></thead>
-      <tbody>${cat.cores.map(c=>`<tr><td>${corLabel(c)}</td>${cat.tams.map(t=>`<td><input type="number" inputmode="numeric" id="avg_${c}_${t}" placeholder="0" oninput="somaGradeAV()"></td>`).join("")}</tr>`).join("")}</tbody>
-      <tfoot><tr><td>Total</td>${cat.tams.map(t=>`<td id="avcolt_${t}">0</td>`).join("")}</tr></tfoot></table></div>`;
-  }else{area.innerHTML=`<div class="muted">Digite uma referência do catálogo (ex.: C-BP-001) ou use "Puxar cores do Bling" pra carregar as cores/tamanhos.</div>`;}
-  somaGradeAV();
-}
-function somaGradeAV(){const cat=CATALOGO[(_refAV||"").trim()];let tot=0;if(cat){cat.tams.forEach(t=>{let ct=0;cat.cores.forEach(c=>{ct+=Number((document.getElementById(`avg_${c}_${t}`)||{}).value)||0;});const el=document.getElementById("avcolt_"+t);if(el)el.textContent=ct;tot+=ct;});}const tt=document.getElementById("avtot");if(tt)tt.textContent=tot+" pç";return tot;}
-async function puxarCatalogoAV(){
-  const ref=(document.getElementById("avref").value||"").trim();
-  if(!ref){uiAlert("Digite a referência primeiro (ex.: C-BP-001).");return;}
-  const area=document.getElementById("avGradeArea");area.innerHTML=`<div class="muted">Puxando cores do Bling…</div>`;
-  try{const {status,data}=await blingApi("produto",{ref});
-    if(status!==200||!data.cores||!data.cores.length){area.innerHTML=`<div class="muted">Não encontrei cores pra "${ref}" no Bling. Confira a referência.</div>`;return;}
-    CATALOGO[ref]={nome:data.produto||ref,cores:data.cores,tams:data.tamanhos||TAMS};
-    const nm=document.getElementById("avnome");if(nm&&data.produto)nm.value=data.produto;
-    onRefAV(ref);toast(data.cores.length+" cores puxadas do Bling ✓");
-  }catch(e){area.innerHTML=`<div class="muted">Erro ao puxar do Bling. Tente de novo.</div>`;}
-}
 async function emitirNFAvulsa(){
+  const prodIdx=document.getElementById("avprod").value;
   const bid=document.getElementById("avf").value;
-  const ref=(document.getElementById("avref").value||"").trim();
-  const nome=(document.getElementById("avnome").value||ref||"").trim();
+  const qtd=Number(document.getElementById("avq").value)||0;
   const valor=Number(String(document.getElementById("avv").value).replace(/\./g,'').replace(',','.'))||16.50;
-  if(!bid){uiAlert("Escolha a facção.");return;}
-  const cat=CATALOGO[ref];let qtd=0;const linhas=[];
-  if(cat){cat.cores.forEach(c=>{const parts=[];cat.tams.forEach(t=>{const v=Number((document.getElementById(`avg_${c}_${t}`)||{}).value)||0;if(v>0){parts.push(t+":"+v);qtd+=v;}});if(parts.length)linhas.push(corLabel(c)+" ("+parts.join(" ")+")");});}
-  if(qtd<1){uiAlert("Preencha a referência e ao menos uma quantidade na grade.");return;}
+  if(prodIdx===""||!_facItens[prodIdx]){uiAlert("Selecione o item de facção (ex.: B-FAC).");return;}
+  if(!bid){uiAlert("Escolha a facção (cliente).");return;}
+  if(qtd<1){uiAlert("Informe a quantidade de peças (1 ou mais).");return;}
+  const it=_facItens[prodIdx];
   const f=S.faccoes.find(x=>String(x.blingId)===String(bid)); const fnome=f?f.nome:"facção";
-  const prodTxt=(nome||ref)+(ref&&ref!==nome?(" ["+ref+"]"):"");
-  if(!await uiConfirm(`Emitir e AUTORIZAR a NF avulsa na SEFAZ?\n\nFacção: ${fnome}\nProduto: ${prodTxt}\nGrade: ${linhas.join(" · ")}\nTotal: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(A nota é enviada pra SEFAZ de verdade e a DANFE abre pra imprimir.)`))return;
+  if(!await uiConfirm(`Emitir e AUTORIZAR a NF avulsa na SEFAZ?\n\nItem: ${it.codigo} — ${it.nome}\nFacção: ${fnome}\nQtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(A nota é enviada pra SEFAZ de verdade e a DANFE abre pra imprimir.)`))return;
   toast("Emitindo e autorizando na SEFAZ…");
   try{
-    const obs=("Remessa p/ industrializacao - avulsa - "+prodTxt+" - "+linhas.join(" · ")).slice(0,480);
-    const rr=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:bid,quantidade:qtd,valor:valor,obs})});
+    const obs="Remessa p/ industrializacao - avulsa - "+it.codigo;
+    const rr=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:bid,quantidade:qtd,valor:valor,obs,itemCodigo:it.codigo,itemDescricao:it.nome,itemNcm:it.ncm||""})});
     if(!(rr.status>=200&&rr.status<300&&rr.data&&rr.data.data&&rr.data.data.id)){uiAlert("Não consegui criar a NF-e.\n\n"+JSON.stringify(rr.data&&(rr.data.error||rr.data)).slice(0,400));return;}
     const nfeId=rr.data.data.id, numero=rr.data.data.numero||nfeId;
     toast("Enviando pra SEFAZ…");
