@@ -307,7 +307,7 @@ function tamsDe(l){ // tamanhos REAIS do lote (número ou letra), nunca o TAMS f
   const letras=TAMS.filter(t=>arr.includes(t));
   const nums=arr.filter(t=>!TAMS.includes(t)).sort((a,b)=>(parseFloat(a)||0)-(parseFloat(b)||0));
   return letras.concat(nums);}
-function totGrade(g){return TAMS.reduce((s,t)=>s+(Number(g[t])||0),0);}
+function totGrade(g){return Object.values(g||{}).reduce((s,v)=>s+(Number(v)||0),0);}
 function totLote(l){return Object.values(coresDe(l)).reduce((s,g)=>s+totGrade(g),0);}
 function etStatus(e){
   if(e.partes&&e.partes.length){
