@@ -1038,8 +1038,8 @@ async function delFaccao(id){if(await uiConfirm("Excluir facção?")){S.faccoes=
 
 // ---------- FINANCEIRO ----------
 function _finKey(fid){const f=S.faccoes.find(x=>x.id===fid)||{};return 'n:'+(((f.nome||fid)+'').trim().toLowerCase());}
-function finPorFaccao(cutoff){const map={};
-  const okData=dt=>{if(!cutoff)return true;if(!dt)return false;return (dt+"").slice(0,10)<=cutoff;};
+function finPorFaccao(fromD,cutoff){const map={};
+  const okData=dt=>{if(!dt)return false;const d=(dt+"").slice(0,10);return (!fromD||d>=fromD)&&(!cutoff||d<=cutoff);};
   function add(fid,it){const k=_finKey(fid);if(!map[k]){const f=S.faccoes.find(x=>x.id===fid)||{};map[k]={key:k,nome:f.nome||fName(fid),blingId:f.blingId||"",faccaoIds:[],total:0,aReceber:0,entregue:0,producao:0,fechavel:0,fechamento:0,itens:[]};}
     const m=map[k];if(!m.faccaoIds.includes(fid))m.faccaoIds.push(fid);if(!m.blingId){const f=S.faccoes.find(x=>x.id===fid);if(f&&f.blingId)m.blingId=f.blingId;}
     it.faccaoId=fid;it.noFechamento=(!it.pago&&it.concluido&&okData(it.dtRet));m.total+=it.base;
@@ -1056,9 +1056,11 @@ function perdaGrupo(faccaoIds){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEa
   else if(faccaoIds.includes(e.faccaoId)&&Number(e.qtdRet)!==0){env+=Number(e.qtdEnv)||0;ret+=qEtapa(e);}
 }));const perda=env-ret;return{env,ret,perda,pct:env?perda/env*100:0};}
 function setFinData(v){S.finAteData=v||fimMesAtual();save();vFin();}
+function setFinDe(v){S.finDeData=v||inicioMesAtual();save();vFin();}
+function setFinPeriodo(p){const d=new Date();let ini,fim;if(p==='mesPassado'){ini=new Date(d.getFullYear(),d.getMonth()-1,1);fim=new Date(d.getFullYear(),d.getMonth(),0);}else{ini=new Date(d.getFullYear(),d.getMonth(),1);fim=new Date(d.getFullYear(),d.getMonth()+1,0);}S.finDeData=ini.toISOString().slice(0,10);S.finAteData=fim.toISOString().slice(0,10);save();vFin();}
 function setFinFiltro(v){S.finFiltro=v||"";save();vFin();}
-function vFin(){const cutoff=S.finAteData||fimMesAtual();const dados=finPorFaccao(cutoff).sort((a,b)=>(b.fechamento||0)-(a.fechamento||0)||b.aReceber-a.aReceber);
-  const lotesAbertosMes=S.lotes.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l)));
+function vFin(){const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteData||fimMesAtual();const dados=finPorFaccao(from,cutoff).sort((a,b)=>(b.fechamento||0)-(a.fechamento||0)||b.aReceber-a.aReceber);
+  const lotesAbertosMes=S.lotes.filter(l=>!["Concluído","Encerrado"].includes(statusLote(l))&&(!l.criadoEm||((l.criadoEm+"").slice(0,10)>=from&&(l.criadoEm+"").slice(0,10)<=cutoff)));
   const filtro=(S.finFiltro||"").toLowerCase().trim();
   const dadosF=filtro?dados.filter(f=>(f.nome||"").toLowerCase().includes(filtro)):dados;
   const totalFechamento=dados.reduce((s,f)=>s+(f.fechamento||0),0);
@@ -1067,35 +1069,36 @@ function vFin(){const cutoff=S.finAteData||fimMesAtual();const dados=finPorFacca
   const totalReceber=dados.reduce((s,f)=>s+f.aReceber,0);
   document.getElementById("app").innerHTML=`
   <div class="card"><h2 style="margin:0 0 6px">Fechamento de pagamento</h2>
-    <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap"><label style="margin:0">Entregue até:</label><input type="date" value="${cutoff}" onchange="setFinData(this.value)" style="max-width:175px"><input list="finFacList" placeholder="🔎 Filtrar facção" value="${S.finFiltro||''}" oninput="setFinFiltro(this.value)" style="max-width:180px"><datalist id="finFacList">${dados.map(f=>`<option value="${f.nome}">`).join("")}</datalist>${filtro?`<button class="btn mini sec" onclick="setFinFiltro('')">limpar</button>`:''}</div>
-    <div class="between" style="margin-top:10px"><span><b>A pagar</b> (entregue até ${dataBR(cutoff)}):</span><b class="tot" style="color:var(--acc)">${money(totalFechamento)}</b></div>
-    <div class="muted" style="margin-top:6px">Conta só etapas/partes <b>concluídas, não pagas e entregues até ${dataBR(cutoff)}</b>. Entregue no total (qualquer data): ${money(totalEntregue)} · Em produção: ${money(totalProd)} · A receber total: ${money(totalReceber)}</div></div>
-  <div class="card"><div class="between"><h2 style="margin:0">Lotes em aberto no mês</h2><b class="tot" style="color:var(--warn)">${lotesAbertosMes.length}</b></div>
+    <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap"><label style="margin:0">Período — De:</label><input type="date" value="${from}" onchange="setFinDe(this.value)" style="max-width:150px"><label style="margin:0">Até:</label><input type="date" value="${cutoff}" onchange="setFinData(this.value)" style="max-width:150px"><input list="finFacList" placeholder="🔎 Filtrar facção" value="${S.finFiltro||''}" oninput="setFinFiltro(this.value)" style="max-width:180px"><datalist id="finFacList">${dados.map(f=>`<option value="${f.nome}">`).join("")}</datalist>${filtro?`<button class="btn mini sec" onclick="setFinFiltro('')">limpar</button>`:''}</div>
+    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn mini sec" onclick="setFinPeriodo('mesAtual')">Mês atual</button><button class="btn mini sec" onclick="setFinPeriodo('mesPassado')">Mês passado</button></div>
+    <div class="between" style="margin-top:10px"><span><b>A pagar</b> (entregue de ${dataBR(from)} a ${dataBR(cutoff)}):</span><b class="tot" style="color:var(--acc)">${money(totalFechamento)}</b></div>
+    <div class="muted" style="margin-top:6px">Conta só etapas/partes <b>concluídas, não pagas e entregues entre ${dataBR(from)} e ${dataBR(cutoff)}</b>. Entregue no total (qualquer data): ${money(totalEntregue)} · Em produção: ${money(totalProd)} · A receber total: ${money(totalReceber)}</div></div>
+  <div class="card"><div class="between"><h2 style="margin:0">Lotes lançados no período (em aberto)</h2><b class="tot" style="color:var(--warn)">${lotesAbertosMes.length}</b></div>
     ${lotesAbertosMes.length?lotesAbertosMes.map(l=>`<div class="between" style="padding:4px 0;border-bottom:1px solid var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><span>#${l.numero} · ${l.produto}</span>${pill(statusLote(l))}</div>`).join(""):'<div class="muted">Nenhum lote em aberto — tudo concluído/encerrado ✓</div>'}</div>
   ${dadosF.filter(f=>f.aReceber>0).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
-    <div class="muted" style="margin:4px 0">Entregue até ${dataBR(cutoff)}: <b style="color:var(--acc)">${money(f.fechamento||0)}</b> · Entregue total: ${money(f.entregue)} · Em produção: ${money(f.producao)}</div>
+    <div class="muted" style="margin:4px 0">Entregue no período (${dataBR(from)}–${dataBR(cutoff)}): <b style="color:var(--acc)">${money(f.fechamento||0)}</b> · Entregue total: ${money(f.entregue)} · Em produção: ${money(f.producao)}</div>
     <table><tr><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Total</th><th>Situação</th><th></th></tr>
     ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${it.q}</td><td class="right">${money(it.base)}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?(it.noFechamento?'<span class="pill" style="background:var(--acc);color:#022">no fechamento</span>':'<span class="pill" style="background:#999;color:#fff">após o corte</span>'):'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
     ${(()=>{const p=perdaGrupo(f.faccaoIds);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
-    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.key}')"${(f.fechamento||0)<=0?' disabled title="Nada entregue até a data"':''}>🧾 Gerar conta (até ${dataBR(cutoff)})</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.key}')"${(f.fechamento||0)<=0?' disabled title="Nada entregue no período"':''}>🧾 Gerar conta (${dataBR(from)}–${dataBR(cutoff)})</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
 async function gerarContaPagar(key){
-  const cutoff=S.finAteData||fimMesAnterior();
-  const okData=dt=>!dt?false:((dt+"").slice(0,10)<=cutoff);
-  const fin=finPorFaccao(cutoff).find(x=>x.key===key); if(!fin){return;}
-  if((fin.fechamento||0)<=0){uiAlert("Não há etapa CONCLUÍDA e ENTREGUE até "+dataBR(cutoff)+" pendente para esta facção.\n\nAjuste a data do fechamento ou marque a etapa/parte como concluída.");return;}
+  const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteData||fimMesAtual();
+  const okData=dt=>{if(!dt)return false;const d=(dt+"").slice(0,10);return (!from||d>=from)&&(!cutoff||d<=cutoff);};
+  const fin=finPorFaccao(from,cutoff).find(x=>x.key===key); if(!fin){return;}
+  if((fin.fechamento||0)<=0){uiAlert("Não há etapa CONCLUÍDA e ENTREGUE entre "+dataBR(from)+" e "+dataBR(cutoff)+" pendente para esta facção.\n\nAjuste o período do fechamento ou marque a etapa/parte como concluída.");return;}
   if(!fin.blingId){uiAlert("Esta facção não está vinculada ao Bling. Edite a facção e use \"Buscar no Bling\" pra vincular antes de gerar a conta.");return;}
   const ids=fin.faccaoIds;
   const venc=await uiPrompt("Vencimento da conta (AAAA-MM-DD):",hoje()); if(!venc)return;
-  if(!await uiConfirm(`Gerar conta a pagar no Bling (entregue até ${dataBR(cutoff)})?\n\nFacção: ${fin.nome}\nValor: ${money(fin.fechamento)}\nVencimento: ${venc}`))return;
+  if(!await uiConfirm(`Gerar conta a pagar no Bling (entregue de ${dataBR(from)} a ${dataBR(cutoff)})?\n\nFacção: ${fin.nome}\nValor: ${money(fin.fechamento)}\nVencimento: ${venc}`))return;
   toast("Gerando no Bling…");
   try{
-    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:fin.blingId,valor:fin.fechamento,vencimento:venc,historico:"Produção entregue até "+dataBR(cutoff)+" — "+fin.nome})});
+    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:fin.blingId,valor:fin.fechamento,vencimento:venc,historico:"Produção entregue "+dataBR(from)+" a "+dataBR(cutoff)+" — "+fin.nome})});
     if(status>=200&&status<300&&data&&data.data&&data.data.id){
       // dá baixa só nas etapas/partes CONCLUÍDAS, não pagas e ENTREGUES até a data de corte
       S.lotes.forEach(l=>{let mexeu=false;l.etapas.forEach(e=>{
         if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(ids.includes(p.faccaoId)&&!p.pago&&(p.status==="Concluído"||e.status==="Concluído")&&okData(p.dtRet||e.dtRet)){p.pago=true;mexeu=true;}});}
         else if(ids.includes(e.faccaoId)&&!e.pago&&e.status==="Concluído"&&okData(e.dtRet)){e.pago=true;mexeu=true;}});
-        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Conta a pagar gerada (Bling nº ${data.data.id}, até ${dataBR(cutoff)}) — ${fin.nome}`});});
+        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Conta a pagar gerada (Bling nº ${data.data.id}, ${dataBR(from)}–${dataBR(cutoff)}) — ${fin.nome}`});});
       save();render();
       uiAlert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")\nAs etapas concluídas dessa facção foram baixadas.");
     } else {
