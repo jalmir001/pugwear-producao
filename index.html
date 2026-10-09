@@ -212,9 +212,24 @@ async function emitirNFAvulsa(){
     toast("Enviando pra SEFAZ…");
     const s=await blingApi("nfe-enviar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:nfeId})});
     const link=(s.data&&(s.data.linkDanfe||s.data.linkPDF))||"";
-    if(link){ window.open(link,"_blank"); closeSheet(); uiAlert("✓ NF-e avulsa nº "+numero+" AUTORIZADA na SEFAZ!\n\nA DANFE abriu em outra aba pra imprimir."); }
-    else { uiAlert("NF-e nº "+numero+" criada e enviada, mas a SEFAZ ainda não retornou a autorização (ou houve rejeição).\n\nSituação: "+(s.data&&s.data.situacao)+"\nConfira no Bling em alguns instantes."); }
+    S.nfAvulsas=S.nfAvulsas||[];
+    S.nfAvulsas.unshift({id:nfeId,numero,link,chave:(s.data&&s.data.chaveAcesso)||"",data:new Date().toISOString(),faccao:fnome,item:it.codigo,itemNome:it.nome,qtd,valor});
+    save();
+    if(link){ window.open(link,"_blank"); closeSheet(); uiAlert("✓ NF-e avulsa nº "+numero+" AUTORIZADA na SEFAZ!\n\nA DANFE abriu em outra aba pra imprimir.\n(Fica guardada em \"NFs avulsas emitidas\" pra reimprimir.)"); }
+    else { uiAlert("NF-e nº "+numero+" criada e enviada, mas a SEFAZ ainda não retornou a autorização (ou houve rejeição).\n\nSituação: "+(s.data&&s.data.situacao)+"\nConfira no Bling em alguns instantes.\n(Já fica na lista de NFs avulsas pra reimprimir depois.)"); }
   }catch(err){uiAlert("Erro ao falar com o Bling. Tente de novo.");}
+}
+function listarNFAvulsas(){
+  const arr=S.nfAvulsas||[];
+  const rows=arr.length?arr.map((n,k)=>`<div class="card" style="margin:6px 0"><div class="between"><b>NF nº ${n.numero}</b><span class="muted" style="font-size:11px">${n.data?new Date(n.data).toLocaleString("pt-BR"):""}</span></div><div class="muted" style="font-size:12px">${n.item||""}${n.itemNome?(" — "+n.itemNome):""} · ${n.faccao||""} · ${n.qtd} pç × ${money(n.valor)} = ${money((Number(n.qtd)||0)*(Number(n.valor)||0))}</div><div style="margin-top:6px"><button class="btn mini sec" onclick="reimprimirNFAvulsa(${k})">🖨️ Imprimir DANFE</button></div></div>`).join(""):`<div class="muted">Nenhuma NF avulsa emitida ainda.</div>`;
+  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>🧾 NFs avulsas emitidas</h2><div class="hint">Reimprima a DANFE de qualquer NF avulsa já emitida.</div><div style="margin-top:10px">${rows}</div>`);
+}
+async function reimprimirNFAvulsa(k){
+  const n=(S.nfAvulsas||[])[k]; if(!n)return; toast("Abrindo DANFE…");
+  try{const {data}=await blingApi("nfe-danfe",{id:n.id});const link=(data&&(data.linkDanfe||data.linkPDF))||n.link;
+    if(link){if(!n.link&&link){n.link=link;save();}window.open(link,"_blank");}
+    else{uiAlert("Ainda não há DANFE disponível pra essa nota (pode não estar autorizada). Situação: "+(data&&data.situacao));}
+  }catch(err){ if(n.link){window.open(n.link,"_blank");} else {uiAlert("Erro ao abrir a DANFE. Tente de novo.");} }
 }
 function setSB(t){const e=document.getElementById("sbst");if(e)e.textContent=t;}
 function cloudPush(){
@@ -349,7 +364,7 @@ function vLotes(){
     if(_fLotes.st&&statusLote(l)!==_fLotes.st)return false;
     if(_fLotes.q){const q=_fLotes.q.toLowerCase();const txt=(l.produto+" "+l.ref+" "+Object.keys(coresDe(l)).map(corLabel).join(" ")+" #"+l.numero).toLowerCase();if(!txt.includes(q))return false;}
     return true;});
-  document.getElementById("app").innerHTML=`<div class="between" style="margin-bottom:10px"><h2 style="margin:0">Lotes</h2><span style="display:flex;gap:6px"><button class="btn sec" onclick="novaNFAvulsa()">🧾 NF avulsa</button><button class="btn" onclick="novoLote()">+ Novo lote</button></span></div>
+  document.getElementById("app").innerHTML=`<div class="between" style="margin-bottom:10px"><h2 style="margin:0">Lotes</h2><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sec" onclick="listarNFAvulsas()">📋 NFs emitidas</button><button class="btn sec" onclick="novaNFAvulsa()">🧾 NF avulsa</button><button class="btn" onclick="novoLote()">+ Novo lote</button></span></div>
     <div class="grid2" style="margin-bottom:10px"><input placeholder="Buscar produto/cor/nº" value="${_fLotes.q}" oninput="_fLotes.q=this.value;vLotes()"><select onchange="_fLotes.st=this.value;vLotes()"><option value="">Todos os status</option>${["Aberto","Em produção","Atrasado","Concluído","Encerrado"].map(s=>`<option ${_fLotes.st===s?"selected":""}>${s}</option>`).join("")}</select></div>
     ${L.map(cardLote).join("")||'<div class="muted">Nenhum lote com esse filtro.</div>'}`;}
 
