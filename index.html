@@ -617,12 +617,13 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
   if(override){c=override.cores||{};fac=override.faccaoId?S.faccoes.find(x=>x.id===override.faccaoId):null;destNome=override.etapaNome||null;valorUnit=Number(override.valor)||0;}
   else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
   const cores=Object.keys(c);const totalPecas=cores.reduce((s,cor)=>s+totGrade(c[cor]),0);
+  const T=tamsDe(l);
   const moLote=custoLote(l).mo;const valorTotal=valorUnit>0?valorUnit*totalPecas:moLote;const valorPP=valorUnit>0?valorUnit:(totalPecas?moLote/totalPecas:0);
   const em=S.empresa||{};
   const header=`<div class="hdr"><div class="emit"><div class="nm">${em.nome||"Empresa"}</div>${em.cnpj?`<div>CNPJ: ${em.cnpj}</div>`:""}${em.endereco?`<div class="ad">${em.endereco}</div>`:""}</div>
     <div class="dest"><div class="lb">DESTINATÁRIO / FACÇÃO</div>${fac?`<div class="nm">${fac.nome}</div>${fac.cnpj?`<div>CNPJ: ${fac.cnpj}</div>`:""}${fac.endereco?`<div class="ad">${fac.endereco}</div>`:""}${destNome?`<div class="ad">Etapa: ${destNome}</div>`:""}`:`<div class="ln"></div><div class="ln"></div>`}</div></div>`;
-  const rows=cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${TAMS.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("");
-  const foot=`<tr><td>Total</td>${TAMS.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totalPecas}</b></td></tr>`;
+  const rows=cores.map(cor=>`<tr><td>${corLabel(cor)}</td>${T.map(t=>`<td>${c[cor][t]||0}</td>`).join("")}<td><b>${totGrade(c[cor])}</b></td></tr>`).join("");
+  const foot=`<tr><td>Total</td>${T.map(t=>`<td>${cores.reduce((s,cor)=>s+(Number(c[cor][t])||0),0)}</td>`).join("")}<td><b>${totalPecas}</b></td></tr>`;
   const w=window.open("","_blank");
   w.document.write(`<html><head><title>Romaneio #${l.numero}</title><style>body{font-family:Arial;padding:22px;color:#111}h1{font-size:17px;margin:12px 0 4px}
     .hdr{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #222;padding-bottom:8px}
@@ -632,7 +633,7 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
     .sig{margin-top:46px;display:flex;gap:40px}.sig div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:12px;text-align:center}</style></head>
   <body>${header}<h1>Romaneio de Produção — Lote #${l.numero}${destNome?" · "+destNome:""}</h1>
   <div>Produto: <b>${l.produto}</b> ${l.ref?"("+l.ref+")":""} &nbsp;·&nbsp; Data: ${new Date().toLocaleDateString("pt-BR")} &nbsp;·&nbsp; Total: <b>${totalPecas} peças</b> &nbsp;·&nbsp; Valor: <b>${money(valorTotal)}</b>${valorPP?` (${money(valorPP)}/pç)`:""}</div>
-  <table><thead><tr><th>Cor</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}<th>Total</th></tr></thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>
+  <table><thead><tr><th>Cor</th>${T.map(t=>`<th>${t}</th>`).join("")}<th>Total</th></tr></thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>
   <div class="sig"><div>Facção / Responsável</div><div>Data de entrega</div><div>Assinatura</div></div>
   <scr`+`ipt>window.onload=function(){window.print()}<\/scr`+`ipt></body></html>`);w.document.close();}
 
