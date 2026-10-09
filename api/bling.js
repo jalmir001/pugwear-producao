@@ -364,7 +364,14 @@ export default async function handler(req, res) {
       }
       const itens = Object.values(found).filter(it => it.situacao !== 'I');
       for (const it of itens) {
-        try { const d = ((await bfetch('/produtos/' + it.id, token)).body || {}).data || {}; it.ncm = (d.tributacao && d.tributacao.ncm) || ''; } catch (e) { it.ncm = ''; }
+        it.ncm = '';
+        for (let t = 0; t < 4; t++) { // retry: NCM é fiscal, não pode vir vazio por rate-limit
+          try {
+            const r = await bfetch('/produtos/' + it.id, token);
+            if (r.status === 200) { const d = (r.body || {}).data || {}; it.ncm = (d.tributacao && d.tributacao.ncm) || ''; break; }
+          } catch (e) { }
+          await new Promise(x => setTimeout(x, 500));
+        }
       }
       return res.status(200).json({ itens });
     }
