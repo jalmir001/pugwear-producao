@@ -632,9 +632,7 @@ function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const 
 function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
   let c,fac,destNome,valorUnit=0;
   if(override){c=override.cores||{};fac=override.faccaoId?S.faccoes.find(x=>x.id===override.faccaoId):null;destNome=override.etapaNome||null;valorUnit=Number(override.valor)||0;}
-  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";let destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;
-    if(!destino){const comFac=(l.etapas||[]).filter(e=>e.faccaoId&&S.faccoes.find(x=>x.id===e.faccaoId));destino=comFac.find(e=>e.status==="Em produção")||comFac.find(e=>e.status!=="Concluído")||comFac[comFac.length-1]||null;}
-    fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
+  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
   const cores=Object.keys(c);const totalPecas=cores.reduce((s,cor)=>s+totGrade(c[cor]),0);
   const T=tamsDe(l);
   const moLote=custoLote(l).mo;const valorTotal=valorUnit>0?valorUnit*totalPecas:moLote;const valorPP=valorUnit>0?valorUnit:(totalPecas?moLote/totalPecas:0);
