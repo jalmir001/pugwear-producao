@@ -435,6 +435,7 @@ function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">�
     <div class="muted" style="margin:4px 0 8px">${l.ref?l.ref+" · ":""}${totLote(l)} peças · Valor: <b style="color:var(--acc)">${money(custoLote(l).mo)}</b></div>
     ${gradeTabela(l)}
     <div class="row" style="margin-top:10px">
+      <button class="btn mini" style="background:var(--acc);color:#fff" onclick="salvarTudo('${l.id}')">💾 Salvar</button>
       <button class="btn sec mini" onclick="editarGrade('${l.id}')">✏️ Editar grade</button>
       <button class="btn sec mini" onclick="duplicarLote('${l.id}')">⧉ Duplicar</button>
       <select id="destEt" class="btn sec mini" style="width:auto;padding:7px 10px"><option value="">Romaneio: todas</option>${l.etapas.map((e,i)=>`<option value="${i}">→ ${e.nome}</option>`).join("")}</select>
@@ -625,12 +626,15 @@ function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const T=tamsDe(l);co
   l.gradeCores=gc;const tot=totLote(l);const corte=l.etapas.find(e=>e.nome==="Corte");if(corte&&corte.status!=="Concluído")corte.qtdEnv=tot;
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
 
+function salvarTudo(lid){try{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();}catch(e){}save();try{if(lid)refreshLote(lid);}catch(e){}toast("💾 Salvo ✓");}
 // romaneio (direcionado a etapa opcional)
 function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:parteGrade(l,p),faccaoId:p.faccaoId,etapaNome:e.nome,valor:p.valor});}
 function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
   let c,fac,destNome,valorUnit=0;
   if(override){c=override.cores||{};fac=override.faccaoId?S.faccoes.find(x=>x.id===override.faccaoId):null;destNome=override.etapaNome||null;valorUnit=Number(override.valor)||0;}
-  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
+  else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";let destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;
+    if(!destino){const comFac=(l.etapas||[]).filter(e=>e.faccaoId&&S.faccoes.find(x=>x.id===e.faccaoId));destino=comFac.find(e=>e.status==="Em produção")||comFac.find(e=>e.status!=="Concluído")||comFac[comFac.length-1]||null;}
+    fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
   const cores=Object.keys(c);const totalPecas=cores.reduce((s,cor)=>s+totGrade(c[cor]),0);
   const T=tamsDe(l);
   const moLote=custoLote(l).mo;const valorTotal=valorUnit>0?valorUnit*totalPecas:moLote;const valorPP=valorUnit>0?valorUnit:(totalPecas?moLote/totalPecas:0);
