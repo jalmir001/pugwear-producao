@@ -480,7 +480,28 @@ function stepHtml(l,e,i){const st=etStatus(e);const dividida=e.partes&&e.partes.
     </div>
     <div class="between" style="margin-top:8px"><span class="muted">Custo: <b style="color:var(--acc)">${money(val)}</b> <span style="font-size:11px">(${qEtapa(e)} pç${Number(e.qtdRet)!==0?' retorn.':' env.'})</span>${(Number(e.qtdRet)!==0&&qEtapa(e)<(Number(e.qtdEnv)||0))?` · <b style="color:var(--warn)">perda ${(Number(e.qtdEnv)||0)-qEtapa(e)} pç</b>`:''}${e.dtRet?` · retorno ${fdate(e.dtRet)}`:""}${e.pago?' · <span class="pill p-ok">pago</span>':''}</span>
       <select onchange="setEt('${l.id}',${i},'status',this.value)">${["Aberto","Em produção","Concluído"].map(s=>`<option ${s===e.status?"selected":""}>${s}</option>`).join("")}</select></div>
-    <div class="row" style="margin-top:6px">${(e.faccaoId&&e.status!=="Concluído")?`<button class="btn mini" onclick="concluirEtapa('${l.id}',${i})">✅ Concluir (dá baixa na qtd que voltou)</button>`:''}${(e.faccaoId&&!e.pago&&val>0)?`<button class="btn sec mini" onclick="pagarEtapa('${l.id}',${i})">💰 Baixar pagamento da facção</button>`:''}${e.pago?`<button class="btn sec mini" onclick="estornarEtapa('${l.id}',${i})">↩️ Estornar baixa</button>`:''}</div>${danfe}${divisaoHtml(l,e,i)}</div>`;}
+    <div class="row" style="margin-top:6px">${(e.faccaoId&&e.status!=="Concluído")?`<button class="btn mini" onclick="concluirEtapa('${l.id}',${i})">✅ Concluir (dá baixa na qtd que voltou)</button>`:''}${(e.faccaoId&&!e.pago&&val>0)?`<button class="btn sec mini" onclick="pagarEtapa('${l.id}',${i})">💰 Baixar pagamento da facção</button>`:''}${e.pago?`<button class="btn sec mini" onclick="estornarEtapa('${l.id}',${i})">↩️ Estornar baixa</button>`:''}</div>${_corBaixaHtml(l,e,i)}${danfe}${divisaoHtml(l,e,i)}</div>`;}
+function _corBaixaHtml(l,e,i){
+  if(!e.faccaoId)return '';
+  const cores=Object.keys(coresDe(l));
+  if(cores.length<=1)return '';
+  const feitas=e.coresFeitas||[];
+  const chips=cores.map(cor=>{const done=feitas.includes(cor);return `<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:12px;${done?'opacity:.55':''}"><input type="checkbox" class="cb_${i}" data-cor="${encodeURIComponent(cor)}" ${done?'checked':''}> ${corLabel(cor)}${done?' ✓':''}</label>`;}).join('');
+  return `<div style="margin-top:8px;padding:8px;background:var(--card2);border-radius:8px">
+    <div class="muted" style="font-size:12px;margin-bottom:4px">Baixa por cor — marque as cores que voltaram e conclua só elas (as não marcadas seguem em produção):</div>
+    <div>${chips}</div>
+    <div class="row" style="margin-top:6px"><button class="btn mini" onclick="concluirCoresSel('${l.id}',${i})">✅ Concluir cores marcadas</button>${feitas.length?`<button class="btn sec mini" onclick="limparCoresFeitas('${l.id}',${i})">↩️ limpar</button>`:''}</div>
+    ${feitas.length?`<div class="muted" style="font-size:11px;margin-top:4px">Já concluídas: ${feitas.map(corLabel).join(', ')}</div>`:''}
+  </div>`;}
+function concluirCoresSel(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];
+  const sel=[...document.querySelectorAll('.cb_'+i)].filter(c=>c.checked).map(c=>decodeURIComponent(c.dataset.cor));
+  if(!sel.length){uiAlert('Marque ao menos uma cor que voltou.');return;}
+  e.coresFeitas=[...new Set([...(e.coresFeitas||[]),...sel])];
+  const todasCores=Object.keys(coresDe(l));const todas=todasCores.every(c=>e.coresFeitas.includes(c));
+  if(todas){e.status='Concluído';if(!e.dtRet)e.dtRet=hoje();}else if(e.status==='Aberto')e.status='Em produção';
+  l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome} — cores concluídas: ${sel.map(corLabel).join(', ')}`+(todas?' (etapa concluída)':'')+(e.faccaoId?` (${fName(e.faccaoId)})`:'')});
+  save();refreshLote(lid);toast(todas?'Etapa concluída ✓':'Cores concluídas ✓ ('+sel.length+')');}
+function limparCoresFeitas(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];delete e.coresFeitas;if(e.status==='Concluído')e.status='Em produção';l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${e.nome} — baixa por cor limpa`});save();refreshLote(lid);toast('Cores limpas');}
 function concluirEtapa(lid,i){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];
   const inp=document.getElementById('eret_'+i);if(inp&&inp.value!=='')e.qtdRet=Number(inp.value)||0; // lê a qtd digitada na hora
   e.status="Concluído";if(!e.dtRet)e.dtRet=hoje();
@@ -524,6 +545,7 @@ function divisaoHtml(l,e,i){
       <div class="muted" style="font-size:11px">${Object.keys(g).map(c=>corLabel(c)+" ("+totGrade(g[c])+")").join(", ")}</div>
       <div class="row" style="margin-top:6px;align-items:center;gap:8px"><span class="muted" style="font-size:12px">Enviado ${q}</span><label class="muted" style="font-size:12px">Retornou:</label><input type="number" id="pret_${i}_${pi}" style="width:90px;padding:4px 6px" value="${ret||''}" placeholder="qtd" onchange="setPartRet('${l.id}',${i},${pi},this.value)">${(()=>{const r2=qParte(l,p);return (Number(p.qtdRet)!==0&&r2<q)?`<span style="color:var(--warn);font-size:12px">voltou ${r2} · perda ${q-r2}</span>`:(Number(p.qtdRet)!==0?`<span style="color:var(--acc);font-size:12px">voltou ${r2}</span>`:'');})()}</div>
       <div class="row" style="margin-top:6px;align-items:center;gap:8px"><label class="muted" style="font-size:12px">📅 Data retorno (fecha facção):</label><input type="date" style="padding:4px 6px" value="${p.dtRet||''}" onchange="setPartDtRet('${l.id}',${i},${pi},this.value)"></div>
+      ${_parteCoresHtml(l,i,pi)}
       ${p.nfe?`<div style="margin-top:4px"><button class="btn mini sec" onclick="imprimirDanfeParte('${l.id}',${i},${pi})">🖨️ DANFE nº ${p.nfe.numero}</button></div>`:''}
       <div class="between" style="margin-top:6px"><button class="btn mini sec" onclick="printRomaneioParte('${l.id}',${i},${pi})">🖨️ Romaneio</button><span>${concl?`<button class="btn mini sec" onclick="setPartStatus('${l.id}',${i},${pi},'Em produção')">↩️ reabrir</button>`:`<button class="btn mini sec" onclick="concluirParte('${l.id}',${i},${pi})">✅ Concluir</button>`} ${p.pago?`<span class="pill p-ok">pago</span> <button class="btn mini sec" onclick="estornarParte('${l.id}',${i},${pi})">↩️ estornar</button>`:`<button class="btn mini" onclick="pagarParte('${l.id}',${i},${pi})">💰 dar baixa (pago)</button>`}</span></div></div>`;}).join("");
     h+=`<div class="row" style="margin-top:4px"><button class="btn sec mini" onclick="dividirEtapa('${l.id}',${i})">✏️ Editar divisão</button><button class="btn mini red" onclick="removerDivisao('${l.id}',${i})">Remover divisão</button></div>`;
@@ -532,6 +554,27 @@ function divisaoHtml(l,e,i){
   }
   return h+`</div>`;
 }
+function _parteCoresHtml(l,i,pi){const e=l.etapas[i];const p=e.partes[pi];const g=parteGrade(l,p);const cores=Object.keys(g);
+  if(cores.length<=1)return '';
+  const feitas=p.coresFeitas||[];
+  const chips=cores.map(cor=>{const done=feitas.includes(cor);return `<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:12px;${done?'opacity:.55':''}"><input type="checkbox" class="cbp_${i}_${pi}" data-cor="${encodeURIComponent(cor)}" ${done?'checked':''}> ${corLabel(cor)}${done?' ✓':''}</label>`;}).join('');
+  return `<div style="margin-top:6px;padding:7px;background:var(--card);border-radius:8px">
+    <div class="muted" style="font-size:11px;margin-bottom:3px">Cores desta facção — marque as que voltaram pra dar baixa ou gerar romaneio só delas:</div>
+    <div>${chips}</div>
+    <div class="row" style="margin-top:5px;gap:6px;flex-wrap:wrap"><button class="btn mini" onclick="concluirCoresParte('${l.id}',${i},${pi})">✅ Baixa das marcadas</button><button class="btn sec mini" onclick="romaneioCoresParte('${l.id}',${i},${pi})">🎨 Romaneio das marcadas</button>${feitas.length?`<button class="btn sec mini" onclick="limparCoresParte('${l.id}',${i},${pi})">↩️ limpar</button>`:''}</div>
+    ${feitas.length?`<div class="muted" style="font-size:11px;margin-top:3px">Baixadas: ${feitas.map(corLabel).join(', ')}</div>`:''}
+  </div>`;}
+function _coresMarcadasParte(i,pi){return [...document.querySelectorAll('.cbp_'+i+'_'+pi)].filter(c=>c.checked).map(c=>decodeURIComponent(c.dataset.cor));}
+function concluirCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];const sel=_coresMarcadasParte(i,pi);if(!sel.length){uiAlert('Marque ao menos uma cor que voltou.');return;}
+  p.coresFeitas=[...new Set([...(p.coresFeitas||[]),...sel])];
+  const todas=Object.keys(parteGrade(l,p)).every(c=>p.coresFeitas.includes(c));
+  if(todas){p.status='Concluído';if(!p.dtRet)p.dtRet=hoje();}
+  l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} / ${fName(p.faccaoId)} — cores baixadas: ${sel.map(corLabel).join(', ')}`+(todas?' (facção concluída)':'')});
+  save();refreshLote(lid);toast(todas?'Facção concluída ✓':'Cores baixadas ✓ ('+sel.length+')');}
+function romaneioCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];let sel=_coresMarcadasParte(i,pi);if(!sel.length)sel=(p.coresFeitas||[]);
+  if(!sel.length){uiAlert('Marque as cores que quer no romaneio (ou dê baixa nelas antes).');return;}
+  romaneioSel(lid,sel);}
+function limparCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];delete p.coresFeitas;if(p.status==='Concluído')p.status='Em produção';l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} / ${fName(p.faccaoId)} — baixa por cor limpa`});save();refreshLote(lid);toast('Cores limpas');}
 function dividirEtapa(lid,i,pre){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const cores=Object.keys(c0);
   const atual={};(e.partes||[]).forEach(p=>((p.cores&&p.cores.length)?p.cores:Object.keys(p.grade||{})).forEach(c=>atual[c]=p.faccaoId));
   if(pre)Object.keys(pre).forEach(c=>{if(pre[c])atual[c]=pre[c];});
@@ -628,11 +671,12 @@ function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const T=tamsDe(l);co
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
 
 function salvarTudo(lid){try{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();}catch(e){}save();try{if(lid)refreshLote(lid);}catch(e){}toast("💾 Salvo ✓");}
-function romaneioSel(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
+function romaneioSel(lid,presetCores){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
   const c=coresDe(l);const cores=Object.keys(c);const T=tamsDe(l);
+  const marc=cor=>(!presetCores||!presetCores.length||presetCores.includes(cor));
   const etOpts=l.etapas.map((e,i)=>`<option value="${i}">${e.nome}${e.faccaoId?' · '+fName(e.faccaoId):''}</option>`).join('');
   const rows=cores.map((cor,ci)=>`<tr>
-    <td style="text-align:left;white-space:nowrap;border:1px solid #888;padding:4px 6px"><label style="display:flex;align-items:center;gap:5px;margin:0"><input type="checkbox" class="rsCor" data-ci="${ci}" data-cor="${encodeURIComponent(cor)}" checked> ${corLabel(cor)}</label></td>
+    <td style="text-align:left;white-space:nowrap;border:1px solid #888;padding:4px 6px"><label style="display:flex;align-items:center;gap:5px;margin:0"><input type="checkbox" class="rsCor" data-ci="${ci}" data-cor="${encodeURIComponent(cor)}" ${marc(cor)?'checked':''}> ${corLabel(cor)}</label></td>
     ${T.map(t=>`<td style="border:1px solid #888;padding:2px"><input class="rsQ" data-ci="${ci}" data-tam="${t}" value="${(c[cor]&&c[cor][t])||0}" style="width:44px;text-align:center;padding:4px 2px" inputmode="numeric"></td>`).join('')}
   </tr>`).join('');
   openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button>
