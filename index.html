@@ -440,6 +440,7 @@ function loteSheetHtml(l){return `<button class="close" onclick="closeSheet()">�
       <button class="btn sec mini" onclick="duplicarLote('${l.id}')">⧉ Duplicar</button>
       <select id="destEt" class="btn sec mini" style="width:auto;padding:7px 10px"><option value="">Romaneio: todas</option>${l.etapas.map((e,i)=>`<option value="${i}">→ ${e.nome}</option>`).join("")}</select>
       <button class="btn sec mini" onclick="printRomaneio('${l.id}')">🖨️ Imprimir</button>
+      <button class="btn sec mini" onclick="romaneioSel('${l.id}')">🎨 Romaneio por cor</button>
       <button class="btn sec mini" onclick="emitirRemessa('${l.id}')">🧾 Emitir NF remessa</button>
       <button class="btn sec mini" onclick="etqAbrirDoLote('${l.id}')">🏷️ Imprimir etiquetas</button>
     </div>
@@ -627,6 +628,29 @@ function salvarGrade(id){const l=S.lotes.find(x=>x.id===id);const T=tamsDe(l);co
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:"Grade editada (total "+tot+")"});save();abrirLote(id);toast("Grade salva ✓");}
 
 function salvarTudo(lid){try{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();}catch(e){}save();try{if(lid)refreshLote(lid);}catch(e){}toast("💾 Salvo ✓");}
+function romaneioSel(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
+  const c=coresDe(l);const cores=Object.keys(c);const T=tamsDe(l);
+  const etOpts=l.etapas.map((e,i)=>`<option value="${i}">${e.nome}${e.faccaoId?' · '+fName(e.faccaoId):''}</option>`).join('');
+  const rows=cores.map((cor,ci)=>`<tr>
+    <td style="text-align:left;white-space:nowrap;border:1px solid #888;padding:4px 6px"><label style="display:flex;align-items:center;gap:5px;margin:0"><input type="checkbox" class="rsCor" data-ci="${ci}" data-cor="${encodeURIComponent(cor)}" checked> ${corLabel(cor)}</label></td>
+    ${T.map(t=>`<td style="border:1px solid #888;padding:2px"><input class="rsQ" data-ci="${ci}" data-tam="${t}" value="${(c[cor]&&c[cor][t])||0}" style="width:44px;text-align:center;padding:4px 2px" inputmode="numeric"></td>`).join('')}
+  </tr>`).join('');
+  openSheet(`<button class="close" onclick="abrirLote('${lid}')">×</button>
+   <h2>Romaneio por cor — Lote #${l.numero}</h2>
+   <div class="hint">Marque as cores e ajuste as quantidades que vão nesse romaneio (pra mandar só um pedaço pra próxima etapa). O estoque/lote não é alterado — é só o papel do romaneio.</div>
+   <div style="margin:10px 0"><label>Destino / etapa (opcional — sai no cabeçalho)</label><select id="rsEt"><option value="">— (sem etapa)</option>${etOpts}</select></div>
+   <div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn sec mini" type="button" onclick="_romSelMarcar(true)">marcar todas</button><button class="btn sec mini" type="button" onclick="_romSelMarcar(false)">desmarcar</button></div>
+   <div style="overflow:auto"><table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr><th style="border:1px solid #888;padding:4px 6px">Cor</th>${T.map(t=>`<th style="border:1px solid #888;padding:4px 6px">${t}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+   <button class="btn" style="width:100%;margin-top:14px" onclick="_romSelGerar('${lid}')">🖨️ Gerar romaneio dessa seleção</button>`,true);}
+function _romSelMarcar(v){document.querySelectorAll('.rsCor').forEach(c=>{c.checked=v;});}
+function _romSelGerar(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
+  const grade={};
+  document.querySelectorAll('.rsCor').forEach(chk=>{if(!chk.checked)return;const ci=chk.dataset.ci;const cor=decodeURIComponent(chk.dataset.cor);const row={};
+    document.querySelectorAll('.rsQ[data-ci="'+ci+'"]').forEach(inp=>{const q=Number(inp.value)||0;if(q>0)row[inp.dataset.tam]=q;});
+    if(Object.keys(row).length)grade[cor]=row;});
+  if(!Object.keys(grade).length){uiAlert('Selecione ao menos uma cor com quantidade maior que zero.');return;}
+  const idx=(document.getElementById('rsEt')||{}).value||'';const destino=(idx!==''&&l.etapas[idx])?l.etapas[idx]:null;
+  printRomaneio(lid,{cores:grade,faccaoId:destino?destino.faccaoId:null,etapaNome:destino?destino.nome:null,valor:destino?destino.valor:0});}
 // romaneio (direcionado a etapa opcional)
 function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:parteGrade(l,p),faccaoId:p.faccaoId,etapaNome:e.nome,valor:p.valor});}
 function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
@@ -727,8 +751,9 @@ async function etqDoBling(){
 function etqSet(cor,tam,val){const E=window._ET;if(!E)return;E.grid[cor]=E.grid[cor]||{};E.grid[cor][tam]=Number(val)||0;const el=document.getElementById('etqTot');if(el)el.textContent=etqTotal();}
 function etqTotal(){const E=window._ET;if(!E)return 0;return E.cores.reduce((s,cor)=>s+E.tams.reduce((a,t)=>a+(Number((E.grid[cor]||{})[t])||0),0),0);}
 function etqPreencher(){const E=window._ET;if(!E||!E.cores.length){uiAlert('Carregue um lote ou produto primeiro.');return;}const v=Number(document.getElementById('etqFill').value)||0;E.cores.forEach(cor=>{E.grid[cor]=E.grid[cor]||{};E.tams.forEach(t=>E.grid[cor][t]=v);});vEtiq();}
-function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;E.giro=Number((document.getElementById('etqGiro')||{}).value)||0;S.etqCfg={cols:E.cols,giro:E.giro};save();gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.giro,E.gtins);}
+async function etqGerar(){const E=window._ET;if(!E){return;}E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;E.giro=Number((document.getElementById('etqGiro')||{}).value)||0;S.etqCfg={cols:E.cols,giro:E.giro};save();await _etGarantePrecos();gerarEtiquetasDeGrid(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.giro,E.gtins);}
 function _loadScript(src){return new Promise(function(res,rej){if([].slice.call(document.scripts).some(function(s){return s.src===src;}))return res();var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+async function _etGarantePrecos(){const E=window._ET;if(!E||!E.ref)return;const temP=E.precos&&Object.keys(E.precos).length;const temC=E.codigos&&Object.keys(E.codigos).length;if(temP&&temC)return;toast('Puxando preços/códigos do Bling…');try{await etqPullCodigos(E.ref);}catch(e){}}
 function _etItens(ref,grid,tams,codigos,precos,ov,gtins){
   const temReais=codigos&&Object.keys(codigos).length;let itens=[],faltando=[];
   Object.keys(grid||{}).forEach(function(cor){tams.forEach(function(tam){const q=Number((grid[cor]||{})[tam])||0;if(q<=0)return;
@@ -772,7 +797,7 @@ async function gerarEtiquetasPDF(ref,nome,grid,tams,codigos,cols,precos,ov,gtins
   try{doc.autoPrint();}catch(e){}
   try{window.open(doc.output('bloburl'),'_blank');}catch(e){doc.save('etiquetas.pdf');}
 }
-function etqGerarPDF(){const E=window._ET;if(!E)return;E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;S.etqCfg={cols:E.cols,giro:E.giro||0};save();gerarEtiquetasPDF(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.gtins);}
+async function etqGerarPDF(){const E=window._ET;if(!E)return;E.ref=(document.getElementById('etqRefBase')||{}).value||E.ref;E.nome=(document.getElementById('etqNome')||{}).value||E.nome;E.cols=Number((document.getElementById('etqCols')||{}).value)||2;const ov=Number(((document.getElementById('etqPreco')||{}).value||'').toString().replace(',','.'))||0;S.etqCfg={cols:E.cols,giro:E.giro||0};save();await _etGarantePrecos();gerarEtiquetasPDF(E.ref,E.nome,E.grid,E.tams,E.codigos,E.cols,E.precos,ov,E.gtins);}
 // ---------- ENTRADA DE ESTOQUE (LOJA) ----------
 function _jwtExp(t){try{const p=JSON.parse(atob(t.split('.')[1]));return (p.exp||0)*1000;}catch(e){return 0;}}
 async function getOlistTok(){
