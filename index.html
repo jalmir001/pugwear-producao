@@ -246,7 +246,7 @@ async function cloudPull(){
   try{const {data,error}=await sb.from("app_estado").select("dados").eq("id",SB_ROW).maybeSingle();
     if(error){setSB("⚠ salvo só neste aparelho");return;}
     const d=data&&data.dados;
-    if(d&&d.lotes){S=d;if(!S.empresa)S.empresa=empresaPadrao();const m1=autoLimpaExemplos();const m2=mergeFaccoesDuplicadas();try{localStorage.setItem("pugprod2",JSON.stringify(S));}catch(e){}render();setSB("☁ salvo na nuvem");if(m1||m2)cloudPush();}
+    if(d&&d.lotes){var _ko=(S&&S.olist&&S.olist.access&&_jwtExp(S.olist.access)>Date.now())?S.olist:null;S=d;if(!S.empresa)S.empresa=empresaPadrao();var _rest=false;if(_ko&&(!S.olist||!S.olist.access||_jwtExp(S.olist.access)<=Date.now())){S.olist=_ko;_rest=true;}const m1=autoLimpaExemplos();const m2=mergeFaccoesDuplicadas();try{localStorage.setItem("pugprod2",JSON.stringify(S));}catch(e){}render();setSB("☁ salvo na nuvem");if(m1||m2||_rest)cloudPush();}
     else{cloudPush();} // nuvem vazia: sobe o que já existe aqui
   }catch(e){setSB("⚠ salvo só neste aparelho");}
 }
