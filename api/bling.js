@@ -378,9 +378,27 @@ export default async function handler(req, res) {
     if (action === 'nfe-remessa' && req.method === 'POST') {
       const b = req.body || {};
       if (!b.idContato) return res.status(400).json({ erro: 'sem_faccao' });
-      const qtd = Number(b.quantidade) || 0;
-      const valor = Number(b.valor) || 16.50;
-      if (qtd <= 0) return res.status(400).json({ erro: 'qtd_invalida' });
+      let itensArr;
+      if (Array.isArray(b.itens) && b.itens.length) {
+        itensArr = b.itens.map(it => ({
+          codigo: it.codigo || 'B-FAC',
+          descricao: it.descricao || 'Item', unidade: 'Un',
+          quantidade: Number(it.quantidade) || 0, valor: Number(it.valor) || 0, tipo: 'P',
+          classificacaoFiscal: (it.ncm ? String(it.ncm).replace(/\D/g, '') : '') || '61099000',
+          cfop: it.cfop || '5901', origem: 0
+        })).filter(x => x.quantidade > 0);
+        if (!itensArr.length) return res.status(400).json({ erro: 'qtd_invalida' });
+      } else {
+        const qtd = Number(b.quantidade) || 0;
+        const valor = Number(b.valor) || 16.50;
+        if (qtd <= 0) return res.status(400).json({ erro: 'qtd_invalida' });
+        itensArr = [{
+          codigo: b.itemCodigo || 'B-FAC', descricao: b.itemDescricao || 'Basica Faccao', unidade: 'Un',
+          quantidade: qtd, valor: valor, tipo: 'P',
+          classificacaoFiscal: (b.itemNcm ? String(b.itemNcm).replace(/\D/g, '') : '') || '61099000',
+          cfop: b.itemCfop || '5901', origem: 0
+        }];
+      }
       const agora = new Date().toISOString().slice(0, 19).replace('T', ' ');
       // busca dados completos do contato (senão o destinatário sai sem nome/endereço)
       const cd = ((await bfetch('/contatos/' + Number(b.idContato), token)).body || {}).data || {};
@@ -411,13 +429,7 @@ export default async function handler(req, res) {
         indicadorPresenca: naoContrib ? 9 : 0,
         contato: contatoNfe,
         naturezaOperacao: { id: NAT_REMESSA_IND },
-        itens: [{
-          codigo: b.itemCodigo || 'B-FAC',
-          descricao: b.itemDescricao || 'Basica Faccao', unidade: 'Un',
-          quantidade: qtd, valor: valor, tipo: 'P',
-          classificacaoFiscal: (b.itemNcm ? String(b.itemNcm).replace(/\D/g, '') : '') || '61099000',
-          cfop: b.itemCfop || '5901', origem: 0
-        }]
+        itens: itensArr
       };
       if (b.obs) payload.observacoes = b.obs;
       const { status, body } = await bfetch('/nfe', token, { method: 'POST', body: JSON.stringify(payload) });
