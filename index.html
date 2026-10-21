@@ -580,9 +580,10 @@ function concluirCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const 
   if(todas){p.status='Concluído';if(!p.dtRet)p.dtRet=hoje();}
   l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} / ${fName(p.faccaoId)} — cores baixadas: ${sel.map(corLabel).join(', ')}`+(todas?' (facção concluída)':'')});
   save();refreshLote(lid);toast(todas?'Facção concluída ✓':'Cores baixadas ✓ ('+sel.length+')');}
-function romaneioCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];let sel=_coresMarcadasParte(i,pi);if(!sel.length)sel=(p.coresFeitas||[]);
+function romaneioCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];let sel=_coresMarcadasParte(i,pi);if(!sel.length)sel=(p.coresFeitas||[]);
   if(!sel.length){uiAlert('Marque as cores que quer no romaneio (ou dê baixa nelas antes).');return;}
-  romaneioSel(lid,sel);}
+  const g0=parteGrade(l,p);const grade={};sel.forEach(c=>{if(g0[c])grade[c]=g0[c];});
+  printRomaneio(lid,{cores:grade,faccaoId:p.faccaoId,etapaNome:e.nome,valor:p.valor});}
 function limparCoresParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const p=l.etapas[i].partes[pi];delete p.coresFeitas;if(p.status==='Concluído')p.status='Em produção';l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${l.etapas[i].nome} / ${fName(p.faccaoId)} — baixa por cor limpa`});save();refreshLote(lid);toast('Cores limpas');}
 function dividirEtapa(lid,i,pre){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const c0=coresDe(l);const cores=Object.keys(c0);
   const atual={};(e.partes||[]).forEach(p=>((p.cores&&p.cores.length)?p.cores:Object.keys(p.grade||{})).forEach(c=>atual[c]=p.faccaoId));
@@ -703,7 +704,9 @@ function _romSelGerar(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
     if(Object.keys(row).length)grade[cor]=row;});
   if(!Object.keys(grade).length){uiAlert('Selecione ao menos uma cor com quantidade maior que zero.');return;}
   const idx=(document.getElementById('rsEt')||{}).value||'';const destino=(idx!==''&&l.etapas[idx])?l.etapas[idx]:null;
-  printRomaneio(lid,{cores:grade,faccaoId:destino?destino.faccaoId:null,etapaNome:destino?destino.nome:null,valor:destino?destino.valor:0});}
+  let vUnit=destino?(Number(destino.valor)||0):0;let facId=destino?destino.faccaoId:null;
+  if(destino&&destino.partes&&destino.partes.length){const selC=Object.keys(grade);const pt=destino.partes.find(p=>{const pc=(p.cores&&p.cores.length)?p.cores:Object.keys(parteGrade(l,p));return selC.every(c=>pc.includes(c));});if(pt){vUnit=Number(pt.valor)||0;facId=pt.faccaoId;}}
+  printRomaneio(lid,{cores:grade,faccaoId:facId,etapaNome:destino?destino.nome:null,valor:vUnit});}
 // romaneio (direcionado a etapa opcional)
 function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:parteGrade(l,p),faccaoId:p.faccaoId,etapaNome:e.nome,valor:p.valor});}
 function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
@@ -712,7 +715,7 @@ function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
   else{c=coresDe(l);const sel=document.getElementById("destEt");const idx=sel?sel.value:"";const destino=(idx!==""&&l.etapas[idx])?l.etapas[idx]:null;fac=destino&&destino.faccaoId?S.faccoes.find(x=>x.id===destino.faccaoId):null;destNome=destino?destino.nome:null;valorUnit=destino?(Number(destino.valor)||0):0;}
   const cores=Object.keys(c);const totalPecas=cores.reduce((s,cor)=>s+totGrade(c[cor]),0);
   const T=tamsDe(l);
-  const moLote=custoLote(l).mo;const valorTotal=valorUnit>0?valorUnit*totalPecas:moLote;const valorPP=valorUnit>0?valorUnit:(totalPecas?moLote/totalPecas:0);
+  const moLote=custoLote(l).mo;const _ov=!!override;const valorTotal=valorUnit>0?valorUnit*totalPecas:(_ov?0:moLote);const valorPP=valorUnit>0?valorUnit:(_ov?0:(totalPecas?moLote/totalPecas:0));
   const em=S.empresa||{};
   const header=`<div class="hdr"><div class="emit"><div class="nm">${em.nome||"Empresa"}</div>${em.cnpj?`<div>CNPJ: ${em.cnpj}</div>`:""}${em.endereco?`<div class="ad">${em.endereco}</div>`:""}</div>
     <div class="dest"><div class="lb">DESTINATÁRIO / FACÇÃO</div>${fac?`<div class="nm">${fac.nome}</div>${fac.cnpj?`<div>CNPJ: ${fac.cnpj}</div>`:""}${fac.endereco?`<div class="ad">${fac.endereco}</div>`:""}${destNome?`<div class="ad">Etapa: ${destNome}</div>`:""}`:`<div class="ln"></div><div class="ln"></div>`}</div></div>`;
