@@ -79,6 +79,44 @@ async function getToken() {
   return j.access_token;
 }
 
+// ---- Token do Olist/Tiny guardado no Supabase (linha id='olist' da tabela bling_token) ----
+async function olistSbGet() {
+  const r = await fetch(SB_URL + '/rest/v1/bling_token?id=eq.olist&select=*', { headers: { apikey: SB_KEY } });
+  const txt = await r.text(); let arr; try { arr = JSON.parse(txt); } catch (e) { arr = null; }
+  return (Array.isArray(arr) && arr[0]) ? arr[0] : null;
+}
+async function olistSbSave(obj) {
+  await fetch(SB_URL + '/rest/v1/bling_token', {
+    method: 'POST',
+    headers: { apikey: SB_KEY, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id: 'olist', ...obj })
+  });
+}
+async function olistRefreshNow(rt) {
+  const cid = process.env.OLIST_CLIENT_ID || 'tiny-api-7c08bd5379d7776c3177153e925dd6a946b13ccd-1784241734';
+  const sec = process.env.OLIST_CLIENT_SECRET || 'JUnS3F1UWGEpsXJfzQwx3LM1CtPpeUvi';
+  const body = new URLSearchParams();
+  body.set('grant_type', 'refresh_token'); body.set('client_id', cid); body.set('client_secret', sec); body.set('refresh_token', rt);
+  const r = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: body.toString()
+  });
+  return await r.json();
+}
+async function getOlistToken() {
+  const row = await olistSbGet();
+  if (!row || !row.refresh_token) { const e = new Error('olist_nao_conectado'); e.code = 'olist_nao_conectado'; throw e; }
+  const restante = row.expires_at ? (new Date(row.expires_at).getTime() - Date.now()) : 0;
+  if (row.access_token && restante > 120000) return row.access_token;
+  const j = await olistRefreshNow(row.refresh_token);
+  if (!j.access_token) { const e = new Error('olist_refresh_falhou'); e.code = 'olist_refresh_falhou'; throw e; }
+  await olistSbSave({
+    access_token: j.access_token,
+    refresh_token: j.refresh_token || row.refresh_token,
+    expires_at: new Date(Date.now() + ((j.expires_in || 14400) - 60) * 1000).toISOString()
+  });
+  return j.access_token;
+}
+
 async function bfetch(path, token, opts = {}) {
   const r = await fetch(BLING_API + path, {
     ...opts,
@@ -141,10 +179,16 @@ export default async function handler(req, res) {
   }
 
   // ---- Proxy simples pro Olist/Tiny (token vem no header, não é guardado) ----
+  if (action === 'olist-status') {
+    try { await getOlistToken(); return res.status(200).json({ connected: true }); }
+    catch (e) { return res.status(200).json({ connected: false, motivo: e.code || 'erro' }); }
+  }
+
   if (action === 'olist-get') {
     const path = (req.query.path || '').toString();
-    const otok = req.headers['x-olist-token'];
-    if (!path || !otok) return res.status(400).json({ erro: 'faltando_path_ou_token' });
+    let otok = req.headers['x-olist-token'];
+    if (!otok) { try { otok = await getOlistToken(); } catch (e) { return res.status(401).json({ erro: e.code || 'olist_nao_conectado' }); } }
+    if (!path) return res.status(400).json({ erro: 'faltando_path' });
     try {
       const r = await fetch('https://api.tiny.com.br/public-api/v3' + path, { headers: { Authorization: 'Bearer ' + otok, Accept: 'application/json' } });
       const txt = await r.text();
@@ -156,9 +200,10 @@ export default async function handler(req, res) {
   // ---- Proxy de escrita pro Olist/Tiny (POST/PUT) — token no header, não é guardado ----
   if (action === 'olist-post') {
     const path = (req.query.path || '').toString();
-    const otok = req.headers['x-olist-token'];
+    let otok = req.headers['x-olist-token'];
     const metodo = (req.query.metodo || 'POST').toString().toUpperCase();
-    if (!path || !otok) return res.status(400).json({ erro: 'faltando_path_ou_token' });
+    if (!otok) { try { otok = await getOlistToken(); } catch (e) { return res.status(401).json({ erro: e.code || 'olist_nao_conectado' }); } }
+    if (!path) return res.status(400).json({ erro: 'faltando_path' });
     try {
       const r = await fetch('https://api.tiny.com.br/public-api/v3' + path, {
         method: metodo,
@@ -202,8 +247,27 @@ export default async function handler(req, res) {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: body.toString()
       });
       const txt = await r.text(); let b; try { b = JSON.parse(txt); } catch (e) { b = { raw: txt.slice(0, 300) }; }
+      if (b && b.access_token) {
+        await olistSbSave({
+          access_token: b.access_token,
+          refresh_token: b.refresh_token || '',
+          expires_at: new Date(Date.now() + ((b.expires_in || 14400) - 60) * 1000).toISOString()
+        });
+        return res.status(200).json({ ok: true });
+      }
       return res.status(r.status).json(b);
     } catch (e) { return res.status(502).json({ erro: 'olist_auth_falha', detalhe: String(e.message || e) }); }
+  }
+
+  // ---- Salva um token do Olist colado manualmente (fallback) no Supabase ----
+  if (action === 'olist-save') {
+    const acc = (req.body && req.body.access_token) || '';
+    const ref = (req.body && req.body.refresh_token) || '';
+    if (!acc) return res.status(400).json({ erro: 'faltando_access' });
+    let exp = Date.now() + 14400 * 1000;
+    try { const p = JSON.parse(Buffer.from(acc.split('.')[1], 'base64').toString()); if (p.exp) exp = p.exp * 1000; } catch (e) {}
+    await olistSbSave({ access_token: acc, refresh_token: ref, expires_at: new Date(exp - 60000).toISOString() });
+    return res.status(200).json({ ok: true });
   }
 
   let token;
