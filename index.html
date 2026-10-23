@@ -697,7 +697,20 @@ function romaneioSel(lid,presetCores){const l=S.lotes.find(x=>x.id===lid);if(!l)
    <div style="overflow:auto"><table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr><th style="border:1px solid #888;padding:4px 6px">Cor</th>${T.map(t=>`<th style="border:1px solid #888;padding:4px 6px">${t}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
    <button class="btn" style="width:100%;margin-top:14px" onclick="_romSelGerar('${lid}')">🖨️ Gerar romaneio dessa seleção</button>`,true);}
 function _romSelMarcar(v){document.querySelectorAll('.rsCor').forEach(c=>{c.checked=v;});}
-function _romSelGerar(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
+// Lança as cores de um romaneio na etapa de destino, como uma PARTE separada (fica salvo no lote)
+function _lancaEtapaCor(lid,idx,selC,facId,valor){
+  const l=S.lotes.find(x=>x.id===lid);if(!l)return;const destino=l.etapas[idx];if(!destino)return;
+  destino.partes=destino.partes||[];
+  // tira essas cores de partes já existentes pra não contar 2x
+  destino.partes.forEach(p=>{if(p.cores&&p.cores.length)p.cores=p.cores.filter(c=>!selC.includes(c));if(p.coresFeitas)p.coresFeitas=p.coresFeitas.filter(c=>!selC.includes(c));});
+  destino.partes=destino.partes.filter(p=>p.cores&&p.cores.length);
+  // cria a parte dessa remessa
+  destino.partes.push({faccaoId:facId||destino.faccaoId||'',cores:selC.slice(),valor:(Number(valor)||Number(destino.valor)||0),qtdRet:0,coresFeitas:[]});
+  if(!destino.status||destino.status==='Aberto')destino.status='Em produção';
+  l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`${destino.nome} — lançado por romaneio: ${selC.map(corLabel).join(', ')}${facId?' ('+fName(facId)+')':''}`});
+  save();
+}
+async function _romSelGerar(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
   const grade={};
   document.querySelectorAll('.rsCor').forEach(chk=>{if(!chk.checked)return;const ci=chk.dataset.ci;const cor=decodeURIComponent(chk.dataset.cor);const row={};
     document.querySelectorAll('.rsQ[data-ci="'+ci+'"]').forEach(inp=>{const q=Number(inp.value)||0;if(q>0)row[inp.dataset.tam]=q;});
@@ -706,7 +719,14 @@ function _romSelGerar(lid){const l=S.lotes.find(x=>x.id===lid);if(!l)return;
   const idx=(document.getElementById('rsEt')||{}).value||'';const destino=(idx!==''&&l.etapas[idx])?l.etapas[idx]:null;
   let vUnit=destino?(Number(destino.valor)||0):0;let facId=destino?destino.faccaoId:null;
   if(destino&&destino.partes&&destino.partes.length){const selC=Object.keys(grade);const pt=destino.partes.find(p=>{const pc=(p.cores&&p.cores.length)?p.cores:Object.keys(parteGrade(l,p));return selC.every(c=>pc.includes(c));});if(pt){vUnit=Number(pt.valor)||0;facId=pt.faccaoId;}}
-  printRomaneio(lid,{cores:grade,faccaoId:facId,etapaNome:destino?destino.nome:null,valor:vUnit});}
+  printRomaneio(lid,{cores:grade,faccaoId:facId,etapaNome:destino?destino.nome:null,valor:vUnit});
+  if(destino){
+    const selC=Object.keys(grade);const tp=selC.reduce((s,c)=>s+totGrade(grade[c]),0);
+    if(await uiConfirm('Lançar essas '+tp+' peças ('+selC.map(corLabel).join(', ')+') na etapa "'+destino.nome+'"?\n\nElas vão aparecer lá como uma parte separada — pra você acompanhar o retorno e pagar à parte, sem misturar com o resto do lote.')){
+      _lancaEtapaCor(lid,idx,selC,facId,vUnit);
+      closeSheet();refreshLote(lid);toast('✓ Lançado na etapa '+destino.nome);
+    }
+  }}
 // romaneio (direcionado a etapa opcional)
 function printRomaneioParte(lid,i,pi){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas[i];const p=e.partes[pi];printRomaneio(lid,{cores:parteGrade(l,p),faccaoId:p.faccaoId,etapaNome:e.nome,valor:p.valor});}
 function printRomaneio(id,override){const l=S.lotes.find(x=>x.id===id);
