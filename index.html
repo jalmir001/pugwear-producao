@@ -340,8 +340,10 @@ function etStatus(e){
     if(st!=="Concluído"&&e.dtPrev&&e.dtPrev<hoje())return"Atrasado";return st;
   }
   if(e.status!=="Concluído"&&e.dtPrev&&e.dtPrev<hoje())return"Atrasado";return e.status;}
-function statusLote(l){if(l.encerrado)return"Encerrado";const st=l.etapas.map(etStatus);if(st.includes("Atrasado"))return"Atrasado";if(st.every(s=>s==="Concluído"))return"Concluído";if(st.some(s=>s==="Em produção"))return"Em produção";return"Aberto";}
-function pill(s){const m={"Aberto":"p-abe","Em produção":"p-prod","Concluído":"p-ok","Atrasado":"p-atr","Encerrado":"p-enc"};return`<span class="pill ${m[s]||'p-abe'}">${s}</span>`;}
+function lotePagavel(l){var any=false,todosPagos=true;(l.etapas||[]).forEach(e=>{if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId&&(Number(p.valor)||0)>0){any=true;if(!p.pago)todosPagos=false;}});}else if(e.faccaoId&&(Number(e.valor)||0)>0){any=true;if(!e.pago)todosPagos=false;}});return{any:any,todosPagos:todosPagos};}
+function loteLiquidado(l){var r=lotePagavel(l);return r.any&&r.todosPagos;}
+function statusLote(l){if(l.encerrado)return"Encerrado";if(loteLiquidado(l))return"Pago";const st=l.etapas.map(etStatus);if(st.includes("Atrasado"))return"Atrasado";if(st.every(s=>s==="Concluído"))return"Concluído";if(st.some(s=>s==="Em produção"))return"Em produção";return"Aberto";}
+function pill(s){const m={"Aberto":"p-abe","Em produção":"p-prod","Concluído":"p-ok","Pago":"p-ok","Atrasado":"p-atr","Encerrado":"p-enc"};return`<span class="pill ${m[s]||'p-abe'}">${s}</span>`;}
 function fName(id){const f=S.faccoes.find(x=>x.id===id);return f?f.nome:"—";}
 
 let TAB=localStorage.getItem('pwtab')||"painel";
@@ -370,11 +372,12 @@ function cardLote(l){const cores=Object.keys(coresDe(l));const et=l.etapas.find(
 let _fLotes={q:"",st:""};
 function vLotes(){
   const L=S.lotes.slice().reverse().filter(l=>{
-    if(_fLotes.st&&statusLote(l)!==_fLotes.st)return false;
+    const _sl=statusLote(l);
+    if(_fLotes.st){if(_sl!==_fLotes.st)return false;}else{if(_sl==='Pago')return false;}
     if(_fLotes.q){const q=_fLotes.q.toLowerCase();const txt=(l.produto+" "+l.ref+" "+Object.keys(coresDe(l)).map(corLabel).join(" ")+" #"+l.numero).toLowerCase();if(!txt.includes(q))return false;}
     return true;});
   document.getElementById("app").innerHTML=`<div class="between" style="margin-bottom:10px"><h2 style="margin:0">Lotes</h2><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sec" onclick="listarNFAvulsas()">📋 NFs emitidas</button><button class="btn sec" onclick="novaNFAvulsa()">🧾 NF avulsa</button><button class="btn" onclick="novoLote()">+ Novo lote</button></span></div>
-    <div class="grid2" style="margin-bottom:10px"><input placeholder="Buscar produto/cor/nº" value="${_fLotes.q}" oninput="_fLotes.q=this.value;vLotes()"><select onchange="_fLotes.st=this.value;vLotes()"><option value="">Todos os status</option>${["Aberto","Em produção","Atrasado","Concluído","Encerrado"].map(s=>`<option ${_fLotes.st===s?"selected":""}>${s}</option>`).join("")}</select></div>
+    <div class="grid2" style="margin-bottom:10px"><input placeholder="Buscar produto/cor/nº" value="${_fLotes.q}" oninput="_fLotes.q=this.value;vLotes()"><select onchange="_fLotes.st=this.value;vLotes()"><option value="">Todos os status</option>${["Aberto","Em produção","Atrasado","Concluído","Pago","Encerrado"].map(s=>`<option ${_fLotes.st===s?"selected":""}>${s}</option>`).join("")}</select></div>
     ${L.map(cardLote).join("")||'<div class="muted">Nenhum lote com esse filtro.</div>'}`;}
 
 // ---------- NOVO LOTE ----------
