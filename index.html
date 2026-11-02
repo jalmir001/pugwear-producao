@@ -1188,9 +1188,9 @@ function finPorFaccao(fromD,cutoff){const map={};
     m.itens.push(it);}
   S.lotes.forEach(l=>{const enc=!!l.encerrado;l.etapas.forEach(e=>{
     if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(!p.faccaoId)return;const q=qParte(l,p);const base=q*(Number(p.valor)||0);if(base<=0)return;
-      add(p.faccaoId,{lote:l.numero,etapa:e.nome+" (dividida)",q,v:p.valor,base,pago:!!p.pago,concluido:(p.status==="Concluído"||e.status==="Concluído"),dtRet:(p.dtRet||e.dtRet||""),encerrado:enc,ref:{lid:l.id,nome:e.nome}});});return;}
+      add(p.faccaoId,{lote:l.numero,etapa:e.nome+" (dividida)",q,v:p.valor,base,pago:!!p.pago,concluido:(p.status==="Concluído"||e.status==="Concluído"),dtRet:(p.dtRet||e.dtRet||""),encerrado:enc,nfe:(p.nfe||e.nfe||null),ref:{lid:l.id,nome:e.nome}});});return;}
     if(!e.faccaoId)return;const q=qEtapa(e);const base=q*(Number(e.valor)||0);if(base<=0)return;
-    add(e.faccaoId,{lote:l.numero,etapa:e.nome,q,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),dtRet:(e.dtRet||""),encerrado:enc,ref:{lid:l.id,nome:e.nome}});
+    add(e.faccaoId,{lote:l.numero,etapa:e.nome,q,v:e.valor,base,pago:!!e.pago,concluido:(e.status==="Concluído"),dtRet:(e.dtRet||""),encerrado:enc,nfe:(e.nfe||null),ref:{lid:l.id,nome:e.nome}});
   });});const arr=Object.values(map);arr.forEach(m=>m.pendente=m.aReceber);return arr;}
 function perdaGrupo(faccaoIds){let env=0,ret=0;S.lotes.forEach(l=>l.etapas.forEach(e=>{
   if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(faccaoIds.includes(p.faccaoId)&&Number(p.qtdRet)!==0){const en=totPartes(parteGrade(l,p));env+=en;ret+=qParte(l,p);}});}
@@ -1218,33 +1218,47 @@ function vFin(){const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteDa
     ${lotesAbertosMes.length?lotesAbertosMes.map(l=>`<div class="between" style="padding:4px 0;border-bottom:1px solid var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><span>#${l.numero} · ${l.produto}</span>${pill(statusLote(l))}</div>`).join(""):'<div class="muted">Nenhum lote em aberto — tudo concluído/encerrado ✓</div>'}</div>
   ${dadosF.filter(f=>f.aReceber>0).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
     <div class="muted" style="margin:4px 0">Entregue no período (${dataBR(from)}–${dataBR(cutoff)}): <b style="color:var(--acc)">${money(f.fechamento||0)}</b> · Entregue total: ${money(f.entregue)} · Em produção: ${money(f.producao)}</div>
-    <table><tr><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Total</th><th>Situação</th><th></th></tr>
-    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${it.q}</td><td class="right">${money(it.base)}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?(it.noFechamento?'<span class="pill" style="background:var(--acc);color:#022">no fechamento</span>':'<span class="pill" style="background:#999;color:#fff">após o corte</span>'):'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
+    <table><tr><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Total</th><th>NF</th><th>Situação</th><th></th></tr>
+    ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${it.q}</td><td class="right">${money(it.base)}</td><td>${it.nfe&&it.nfe.numero?`<span class="pill p-ok">nº ${it.nfe.numero}</span>`:`<span class="pill" style="background:#3a2f12;color:#ffd479">não emitida</span>`}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?(it.noFechamento?'<span class="pill" style="background:var(--acc);color:#022">no fechamento</span>':'<span class="pill" style="background:#999;color:#fff">após o corte</span>'):'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
     ${(()=>{const p=perdaGrupo(f.faccaoIds);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
     <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.key}')"${(f.fechamento||0)<=0?' disabled title="Nada entregue no período"':''}>🧾 Gerar conta (${dataBR(from)}–${dataBR(cutoff)})</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
-async function gerarContaPagar(key){
+function gerarContaPagar(key){
   const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteData||fimMesAtual();
   const okData=dt=>{if(!dt)return false;const d=(dt+"").slice(0,10);return (!from||d>=from)&&(!cutoff||d<=cutoff);};
   const fin=finPorFaccao(from,cutoff).find(x=>x.key===key); if(!fin){return;}
-  if((fin.fechamento||0)<=0){uiAlert("Não há etapa CONCLUÍDA e ENTREGUE entre "+dataBR(from)+" e "+dataBR(cutoff)+" pendente para esta facção.\n\nAjuste o período do fechamento ou marque a etapa/parte como concluída.");return;}
   if(!fin.blingId){uiAlert("Esta facção não está vinculada ao Bling. Edite a facção e use \"Buscar no Bling\" pra vincular antes de gerar a conta.");return;}
-  const ids=fin.faccaoIds;
-  const venc=await uiPrompt("Vencimento da conta (AAAA-MM-DD):",hoje()); if(!venc)return;
-  if(!await uiConfirm(`Gerar conta a pagar no Bling (entregue de ${dataBR(from)} a ${dataBR(cutoff)})?\n\nFacção: ${fin.nome}\nValor: ${money(fin.fechamento)}\nVencimento: ${venc}`))return;
+  const eleg=fin.itens.filter(it=>!it.pago&&it.concluido&&okData(it.dtRet));
+  if(!eleg.length){uiAlert("Não há etapa CONCLUÍDA e ENTREGUE entre "+dataBR(from)+" e "+dataBR(cutoff)+" pendente para esta facção.\n\nAjuste o período ou marque a etapa/parte como concluída.");return;}
+  window.__contaSel={key,from,cutoff,fin,eleg};
+  const tot=eleg.reduce((a,it)=>a+it.base,0);
+  const rows=eleg.map((it,ix)=>`<tr><td style="text-align:center"><input type="checkbox" class="contaChk" data-ix="${ix}" checked onchange="_contaTot()"></td><td>#${it.lote}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${money(it.base)}</td><td>${it.nfe&&it.nfe.numero?'<span class="pill p-ok">NF '+it.nfe.numero+'</span>':'<span class="pill" style="background:#3a2f12;color:#ffd479">s/ NF</span>'}</td></tr>`).join("");
+  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>Gerar conta — ${fin.nome}</h2>
+    <div class="hint">Marque os lotes que entram nesse boleto e escolha o vencimento. Só os marcados serão pagos e baixados.</div>
+    <label>📅 Vencimento</label><input type="date" id="contaVenc" value="${hoje()}" style="max-width:180px">
+    <table style="margin-top:10px"><tr><th></th><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Total</th><th>NF</th></tr>${rows}</table>
+    <div class="between" style="margin-top:8px"><span>Total selecionado:</span><b id="contaTot" style="color:var(--acc)">${money(tot)}</b></div>
+    <button class="btn" style="width:100%;margin-top:12px" onclick="_contaGerar()">🧾 Gerar conta no Bling</button>`,true);
+}
+function _contaTot(){const s=window.__contaSel;if(!s)return;let t=0;document.querySelectorAll('.contaChk').forEach(c=>{if(c.checked)t+=s.eleg[+c.dataset.ix].base;});const el=document.getElementById('contaTot');if(el)el.textContent=money(t);}
+async function _contaGerar(){
+  const s=window.__contaSel;if(!s)return;
+  const venc=(document.getElementById('contaVenc')||{}).value;if(!venc){uiAlert("Escolha o vencimento.");return;}
+  const sel=[...document.querySelectorAll('.contaChk')].filter(c=>c.checked).map(c=>s.eleg[+c.dataset.ix]);
+  if(!sel.length){uiAlert("Marque ao menos um lote.");return;}
+  const total=sel.reduce((a,it)=>a+it.base,0);
+  if(!await uiConfirm(`Gerar conta a pagar no Bling?\n\nFacção: ${s.fin.nome}\nLotes: ${sel.length}\nValor: ${money(total)}\nVencimento: ${venc}`))return;
   toast("Gerando no Bling…");
   try{
-    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:fin.blingId,valor:fin.fechamento,vencimento:venc,historico:"Produção entregue "+dataBR(from)+" a "+dataBR(cutoff)+" — "+fin.nome})});
+    const {status,data}=await blingApi("conta-pagar",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:s.fin.blingId,valor:total,vencimento:venc,historico:"Produção — "+s.fin.nome+" ("+sel.length+" lote"+(sel.length>1?"s":"")+")"})});
     if(status>=200&&status<300&&data&&data.data&&data.data.id){
-      // dá baixa só nas etapas/partes CONCLUÍDAS, não pagas e ENTREGUES até a data de corte
+      const selKeys=new Set(sel.map(it=>it.ref.lid+"|"+it.ref.nome+"|"+it.faccaoId));
       S.lotes.forEach(l=>{let mexeu=false;l.etapas.forEach(e=>{
-        if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(ids.includes(p.faccaoId)&&!p.pago&&(p.status==="Concluído"||e.status==="Concluído")&&okData(p.dtRet||e.dtRet)){p.pago=true;mexeu=true;}});}
-        else if(ids.includes(e.faccaoId)&&!e.pago&&e.status==="Concluído"&&okData(e.dtRet)){e.pago=true;mexeu=true;}});
-        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Conta a pagar gerada (Bling nº ${data.data.id}, ${dataBR(from)}–${dataBR(cutoff)}) — ${fin.nome}`});});
-      save();render();
-      uiAlert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")\nAs etapas concluídas dessa facção foram baixadas.");
-    } else {
-      uiAlert("Não consegui criar a conta no Bling.\n"+(JSON.stringify(data).slice(0,200)));
-    }
+        if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(selKeys.has(l.id+"|"+e.nome+"|"+p.faccaoId)&&!p.pago){p.pago=true;mexeu=true;}});}
+        else if(selKeys.has(l.id+"|"+e.nome+"|"+e.faccaoId)&&!e.pago){e.pago=true;mexeu=true;}});
+        if(mexeu)l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Conta a pagar gerada (Bling nº ${data.data.id}, venc ${dataBR(venc)}) — ${s.fin.nome}`});});
+      save();closeSheet();render();
+      uiAlert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")\n"+sel.length+" lote(s) baixado(s).");
+    } else { uiAlert("Não consegui criar a conta no Bling.\n"+(JSON.stringify(data).slice(0,200))); }
   }catch(e){uiAlert("Erro ao falar com o Bling. Tente de novo.");}
 }
 function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;if(e.partes)e.partes.forEach(p=>p.pago=true);l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
