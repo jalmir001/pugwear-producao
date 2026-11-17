@@ -109,6 +109,24 @@ async function blingApi(action,params={},opts={}){
   let data={}; try{data=await r.json();}catch(e){}
   return {status:r.status,data};
 }
+// Relaciona cada referência de produto ao item de facção certo (código + descrição + NCM) pra NF de remessa
+const FAC_MAP=[
+  ['J-BM',    {c:'BJ-FAC',d:'Bermuda Jeans Faccao',n:'62034200'}],
+  ['C-JM',    {c:'CJ-FAC',d:'Calca Jeans Faccao',n:'62034200'}],
+  ['M-CLC',   {c:'CM-FAC',d:'Calca Moletom Faccao',n:'61034200'}],
+  ['M-CM',    {c:'GC-FAC',d:'Blusao Gola Careca Faccao',n:'61102000'}],
+  ['M-BP',    {c:'BM-FAC',d:'Bermuda Moletom Faccao',n:'61034200'}],
+  ['S-BF',    {c:'BS-FAC',d:'Bermuda Sarja Faccao',n:'62034200'}],
+  ['B-PREMIUM',{c:'BS-FAC',d:'Bermuda Sarja Faccao',n:'62034200'}],
+  ['S-CLF',   {c:'CS-FAC',d:'Calca Sarja Faccao',n:'62034200'}],
+  ['C-ALF',   {c:'CS-FAC',d:'Calca Sarja Faccao',n:'62034200'}],
+  ['P-PB',    {c:'P-FAC',d:'Polo Faccao',n:'61051000'}],
+  ['P-TCH',   {c:'P-FAC',d:'Polo Faccao',n:'61051000'}],
+  ['C-CASUAL',{c:'CC-FAC',d:'Camisa Casual Faccao',n:'61052000'}],
+  ['C-BP',    {c:'B-FAC',d:'Basica Faccao',n:'61091000'}],
+  ['C-TEX',   {c:'B-FAC',d:'Basica Faccao',n:'61091000'}]
+];
+function facItemFor(ref){const r=(ref||'').toUpperCase();for(const it of FAC_MAP){if(r.startsWith(it[0]))return it[1];}return {c:'B-FAC',d:'Basica Faccao',n:'61091000'};}
 async function emitirRemessa(lid){
   const l=S.lotes.find(x=>x.id===lid); if(!l)return;
   const cand=[];
@@ -143,7 +161,8 @@ async function emitirRemessa(lid){
   if(!await uiConfirm(`Emitir e AUTORIZAR a NF de remessa na SEFAZ?\n\nFacção: ${f.nome}\nEtapa: ${e.nome}\nQtd: ${qtd} peças × ${money(valor)} = ${money(qtd*valor)}\nNatureza: Remessa para Industrialização\n\n(A nota é enviada pra SEFAZ de verdade e a DANFE abre pra imprimir.)`))return;
   toast("Emitindo e autorizando na SEFAZ…");
   try{
-    const rr=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome+(c.parte?(" / "+f.nome):"")})});
+    const _fi=facItemFor(l.ref);
+    const rr=await blingApi("nfe-remessa",{},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idContato:f.blingId,quantidade:qtd,valor:valor,itemCodigo:_fi.c,itemDescricao:_fi.d,itemNcm:_fi.n,obs:"Remessa p/ industrialização - Lote #"+l.numero+" - "+e.nome+(c.parte?(" / "+f.nome):"")})});
     if(!(rr.status>=200&&rr.status<300&&rr.data&&rr.data.data&&rr.data.data.id)){uiAlert("Não consegui criar a NF-e.\n\n"+JSON.stringify(rr.data&&(rr.data.error||rr.data)).slice(0,400));return;}
     const nfeId=rr.data.data.id, numero=rr.data.data.numero||nfeId;
     toast("Enviando pra SEFAZ…");
@@ -1216,12 +1235,12 @@ function vFin(){const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteDa
     <div class="muted" style="margin-top:6px">Conta só etapas/partes <b>concluídas, não pagas e entregues entre ${dataBR(from)} e ${dataBR(cutoff)}</b>. Entregue no total (qualquer data): ${money(totalEntregue)} · Em produção: ${money(totalProd)} · A receber total: ${money(totalReceber)}</div></div>
   <div class="card"><div class="between"><h2 style="margin:0">Lotes lançados no período (em aberto)</h2><b class="tot" style="color:var(--warn)">${lotesAbertosMes.length}</b></div>
     ${lotesAbertosMes.length?lotesAbertosMes.map(l=>`<div class="between" style="padding:4px 0;border-bottom:1px solid var(--card2);cursor:pointer" onclick="abrirLote('${l.id}')"><span>#${l.numero} · ${l.produto}</span>${pill(statusLote(l))}</div>`).join(""):'<div class="muted">Nenhum lote em aberto — tudo concluído/encerrado ✓</div>'}</div>
-  ${dadosF.filter(f=>f.aReceber>0).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
+  ${dadosF.filter(f=>f.aReceber>0||f.itens.some(it=>it.pago&&it.dtRet&&(it.dtRet+"").slice(0,10)>=from&&(it.dtRet+"").slice(0,10)<=cutoff)).map(f=>`<div class="card"><div class="between"><b>${f.nome}</b><span>Fechamento: <b style="color:var(--acc)">${money(f.fechamento||0)}</b></span></div>
     <div class="muted" style="margin:4px 0">Entregue no período (${dataBR(from)}–${dataBR(cutoff)}): <b style="color:var(--acc)">${money(f.fechamento||0)}</b> · Entregue total: ${money(f.entregue)} · Em produção: ${money(f.producao)}</div>
     <table><tr><th>Lote</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Total</th><th>NF</th><th>Situação</th><th></th></tr>
     ${f.itens.map(it=>`<tr><td>#${it.lote}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${it.q}</td><td class="right">${money(it.base)}</td><td>${it.nfe&&it.nfe.numero?`<span class="pill p-ok">nº ${it.nfe.numero}</span>`:`<span class="pill" style="background:#3a2f12;color:#ffd479">não emitida</span>`}</td><td>${it.pago?'<span class="pill p-ok">pago</span>':(it.concluido?(it.noFechamento?'<span class="pill" style="background:var(--acc);color:#022">no fechamento</span>':'<span class="pill" style="background:#999;color:#fff">após o corte</span>'):'produção')}</td><td class="right">${it.pago?`<button class="btn mini sec" onclick="estornarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">↩️ estornar</button>`:(it.concluido?`<button class="btn mini" onclick="baixarFaccaoEtapa('${it.ref.lid}','${(it.ref.nome||'').replace(/'/g,'')}','${it.faccaoId}')">baixar</button>`:`<span class="muted" style="font-size:11px">em produção</span>`)}</td></tr>`).join("")}</table>
     ${(()=>{const p=perdaGrupo(f.faccaoIds);return p.env?`<div class="muted" style="margin-top:6px">Qualidade: enviado ${p.env} · retornado ${p.ret} · <b style="color:${p.pct>2?'var(--warn)':'var(--acc)'}">perda ${p.pct.toFixed(1)}% (${p.perda} pç)</b></div>`:'';})()}
-    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><button class="btn mini sec" onclick="gerarContaPagar('${f.key}')"${(f.fechamento||0)<=0?' disabled title="Nada entregue no período"':''}>🧾 Gerar conta (${dataBR(from)}–${dataBR(cutoff)})</button></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
+    <div class="between" style="margin-top:8px"><span class="muted">Total geral: ${money(f.total)}</span><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn mini sec" onclick="relatorioPagos('${f.key}')">📄 Relatório pagos (PDF)</button><button class="btn mini sec" onclick="gerarContaPagar('${f.key}')"${(f.fechamento||0)<=0?' disabled title="Nada entregue no período"':''}>🧾 Gerar conta (${dataBR(from)}–${dataBR(cutoff)})</button></span></div></div>`).join("")||'<div class="muted">Sem valores. Defina facção + valor nas etapas.</div>'}`;}
 function gerarContaPagar(key){
   const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteData||fimMesAtual();
   const okData=dt=>{if(!dt)return false;const d=(dt+"").slice(0,10);return (!from||d>=from)&&(!cutoff||d<=cutoff);};
@@ -1260,6 +1279,65 @@ async function _contaGerar(){
       uiAlert("Conta a pagar criada no Bling ✓ (nº "+(data.data.id)+")\n"+sel.length+" lote(s) baixado(s).");
     } else { uiAlert("Não consegui criar a conta no Bling.\n"+(JSON.stringify(data).slice(0,200))); }
   }catch(e){uiAlert("Erro ao falar com o Bling. Tente de novo.");}
+}
+function relatorioPagos(key){
+  const from=S.finDeData||inicioMesAtual();const cutoff=S.finAteData||fimMesAtual();
+  const okData=dt=>{if(!dt)return false;const d=(dt+"").slice(0,10);return (!from||d>=from)&&(!cutoff||d<=cutoff);};
+  const fin=finPorFaccao(from,cutoff).find(x=>x.key===key); if(!fin){return;}
+  const eleg=fin.itens.filter(it=>it.pago&&okData(it.dtRet)).sort((a,b)=>(b.dtRet||"").localeCompare(a.dtRet||"")).map(it=>{const l=S.lotes.find(x=>x.id===it.ref.lid);return Object.assign({},it,{produto:l?l.produto:""});});
+  if(!eleg.length){uiAlert("Nenhum pedido PAGO entregue entre "+dataBR(from)+" e "+dataBR(cutoff)+" para "+fin.nome+".\n\nAjuste o período (De/Até) no topo da aba.");return;}
+  window.__relPg={fin,from,cutoff,eleg};
+  const tot=eleg.reduce((a,it)=>a+it.base,0);
+  const rows=eleg.map((it,ix)=>`<tr><td style="text-align:center"><input type="checkbox" class="relPgChk" data-ix="${ix}" checked onchange="_relPgTot()"></td><td>#${it.lote}</td><td>${it.produto||''}</td><td>${it.etapa}</td><td>${dataBR(it.dtRet)}</td><td class="right">${it.q}</td><td class="right">${money(it.base)}</td></tr>`).join("");
+  openSheet(`<button class="close" onclick="closeSheet()">×</button><h2>Relatório de pagos — ${fin.nome}</h2>
+    <div class="hint">Marque os pedidos que entram no PDF pra facção conferir o fechamento. Período: ${dataBR(from)}–${dataBR(cutoff)}.</div>
+    <table style="margin-top:10px"><tr><th></th><th>Lote</th><th>Produto</th><th>Etapa</th><th>Entrega</th><th class="right">Qtd</th><th class="right">Valor</th></tr>${rows}</table>
+    <div class="between" style="margin-top:8px"><span>Total selecionado:</span><b id="relPgTot" style="color:var(--acc)">${money(tot)}</b></div>
+    <button class="btn" style="width:100%;margin-top:12px" onclick="_relPagosPDF()">📄 Gerar PDF</button>`,true);
+}
+function _relPgTot(){const s=window.__relPg;if(!s)return;let t=0;document.querySelectorAll('.relPgChk').forEach(c=>{if(c.checked)t+=s.eleg[+c.dataset.ix].base;});const el=document.getElementById('relPgTot');if(el)el.textContent=money(t);}
+async function _relPagosPDF(){
+  const s=window.__relPg;if(!s)return;
+  const sel=[...document.querySelectorAll('.relPgChk')].filter(c=>c.checked).map(c=>s.eleg[+c.dataset.ix]);
+  if(!sel.length){uiAlert("Marque ao menos um pedido.");return;}
+  toast("Gerando PDF…");
+  try{
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  }catch(e){await uiAlert("Não consegui carregar o gerador de PDF (precisa de internet).");return;}
+  const jsPDF=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
+  const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+  const em=S.empresa||{};
+  const total=sel.reduce((a,it)=>a+it.base,0);
+  const totQ=sel.reduce((a,it)=>a+(Number(it.q)||0),0);
+  try{doc.addImage(PUG_LOGO,'PNG',14,10,11,12);}catch(e){}
+  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text('Relatório de pedidos pagos',29,16);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.text((em.nome||'')+(em.cnpj?' · CNPJ '+em.cnpj:''),29,21);
+  let y=30;
+  doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('Facção: '+s.fin.nome,14,y);y+=5;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.text('Período de entrega: '+dataBR(s.from)+' a '+dataBR(s.cutoff),14,y);y+=4;
+  doc.text('Emitido em: '+new Date().toLocaleString('pt-BR'),14,y);
+  doc.autoTable({
+    startY:y+4,
+    head:[['Lote','Produto','Etapa','Entrega','Qtd','Valor']],
+    body:sel.map(it=>['#'+it.lote,it.produto||'',it.etapa,dataBR(it.dtRet),String(it.q),money(it.base)]),
+    foot:[['','','','TOTAL',String(totQ),money(total)]],
+    styles:{fontSize:9,cellPadding:2},
+    headStyles:{fillColor:[34,34,34]},
+    footStyles:{fillColor:[230,230,230],textColor:20,fontStyle:'bold'},
+    columnStyles:{4:{halign:'right'},5:{halign:'right'}}
+  });
+  let fy=(doc.lastAutoTable?doc.lastAutoTable.finalY:y)+18;
+  if(fy>270){doc.addPage();fy=24;}
+  doc.setFontSize(9);
+  doc.text('Confiro e concordo com o fechamento acima.',14,fy);fy+=12;
+  doc.text('Conferido por: ____________________________     Data: ____/____/______',14,fy);
+  const fname='pedidos-pagos-'+((s.fin.nome||'faccao').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase())+'-'+hoje()+'.pdf';
+  try{doc.save(fname);}catch(e){try{window.open(doc.output('bloburl'),'_blank');}catch(e2){}}
+  toast('PDF gerado ✓');
+  closeSheet();
 }
 function marcarPago(lid,nome){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);e.pago=true;if(e.partes)e.partes.forEach(p=>p.pago=true);l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} (${fName(e.faccaoId)})`});save();render();toast("Baixado ✓");}
 function baixarFaccaoEtapa(lid,nome,faccaoId){const l=S.lotes.find(x=>x.id===lid);const e=l.etapas.find(x=>x.nome===nome);if(!e)return;if(e.partes&&e.partes.length){e.partes.forEach(p=>{if(p.faccaoId===faccaoId)p.pago=true;});}else if(e.faccaoId===faccaoId){e.pago=true;}l.historico.push({q:new Date().toLocaleString("pt-BR"),t:`Pagamento baixado — ${nome} / ${fName(faccaoId)}`});save();render();toast("Baixado ✓");}
