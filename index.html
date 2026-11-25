@@ -424,7 +424,16 @@ function onRef(v){_ref=v;const cat=CATALOGO[v.trim()];const area=document.getEle
       <tbody>${cat.cores.map(c=>`<tr><td>${corLabel(c)}</td>${cat.tams.map(t=>`<td><input type="number" inputmode="numeric" id="gc_${c}_${t}" placeholder="0" oninput="somaGrade()"></td>`).join("")}</tr>`).join("")}</tbody>
       <tfoot><tr><td>Total</td>${cat.tams.map(t=>`<td id="colt_${t}">0</td>`).join("")}</tr></tfoot></table></div>
       <div class="between" style="margin-top:6px"><span class="muted">Só cores com quantidade viram lote.</span><b id="gtot" style="color:var(--acc)">0 pç</b></div>`;
+    if(!cat._live){cat._live=true;_refreshCoresBling(v.trim());}
   }else{area.innerHTML=`<label>Cor</label><input id="corManual" placeholder="Ex.: Grafite"><label style="margin-top:8px">Grade</label><div class="gwrap"><table class="g"><thead><tr><th>Tam</th>${TAMS.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody><tr><td>Qtd</td>${TAMS.map(t=>`<td><input type="number" id="gm_${t}" placeholder="0"></td>`).join("")}</tr></tbody></table></div>`;}
+}
+async function _refreshCoresBling(ref){
+  try{const {status,data}=await blingApi("produto",{ref});
+    if(status===200&&data&&data.cores&&data.cores.length){
+      CATALOGO[ref]={nome:data.produto||ref,cores:data.cores,tams:(data.tamanhos&&data.tamanhos.length?data.tamanhos:(CATALOGO[ref]?CATALOGO[ref].tams:TAMS)),_live:true};
+      if((_ref||"").trim()===ref)onRef(ref);
+    }
+  }catch(e){}
 }
 async function puxarCatalogo(){
   const ref=(document.getElementById("ref").value||"").trim();
